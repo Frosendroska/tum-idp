@@ -253,25 +253,25 @@ Several organizations leverage Cloudflare R2 for its performance and cost benefi
 
 1. 📈 **LunarCrush**
 
-    Source: [R2 website](https://workers.cloudflare.com/built-with/projects/lunarcrush)
+     Source: [R2 website](https://workers.cloudflare.com/built-with/projects/lunarcrush)
 
-    Utilizes R2 to avoid unexpected egress costs, ensuring predictable expenses even during traffic surges.  ￼
+     Utilizes R2 to avoid unexpected egress costs, ensuring predictable expenses even during traffic surges.  ￼
    
 2. 🎨 **Canva** 
 
-    Sources: [Canva website](https://canvaplugin.com/how-to-connect-canva-to-cloudflare/#:~:text=Canva's%20partnership%20with%20Cloudflare%20began,serverless%20development%2C%20and%20bot%20management.), [R2 website](https://www.cloudflare.com/en-gb/developer-platform/products/r2/)
+     Sources: [Canva website](https://canvaplugin.com/how-to-connect-canva-to-cloudflare/#:~:text=Canva's%20partnership%20with%20Cloudflare%20began,serverless%20development%2C%20and%20bot%20management.), [R2 website](https://www.cloudflare.com/en-gb/developer-platform/products/r2/)
 
     Employs R2 for scalable storage needs, benefiting from its integration with Cloudflare’s global network. ￼
 
 4. 🍕 **DeliveryHero**
 
-    Source: [R2 website](https://www.cloudflare.com/en-gb/case-studies/delivery-hero/)
+     Source: [R2 website](https://www.cloudflare.com/en-gb/case-studies/delivery-hero/)
 
-    Leverages R2 to efficiently manage and deliver content across various regions.
+     Leverages R2 to efficiently manage and deliver content across various regions.
 
        TODO: more research 
 
-Cloudflare R2 Storage Pricing (April 2025)
+### Cloudflare R2 Storage Pricing (April 2025)
 
 Storage Class	Price per GB/Month	Notes
 Standard Storage	$0.015	Suitable for frequently accessed data.
@@ -279,7 +279,7 @@ Infrequent Access	$0.010	Optimized for data accessed less frequently.
 
        TODO: more research 
 
-Cloudflare R2 Operation and Data Transfer Pricing
+### Cloudflare R2 Operation and Data Transfer Pricing
 
 Operation Type	Price per Million Requests	Notes
 Class A Operations	$4.50	Includes operations like PUT, POST, and DELETE.
@@ -289,7 +289,7 @@ Egress to Internet	Free	No charges for data transferred out to the internet.
 
        TODO: more research 
 
-Free Tier:
+### Free Tier:
 
 Resource	Monthly Free Usage
 Storage	10 GB
