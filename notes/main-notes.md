@@ -10,18 +10,21 @@ Sources: [AWS Blog](https://aws.amazon.com/compare/the-difference-between-block-
 
 🧱 **Block Storage** - Raw storage volumes split into fixed-size blocks. Requires a file system to manage data. Fast and low-latency, ideal for databases and VMs. Minimal built-in metadata.
 
-> Example: AWS EBS, Google Persistent Disk, local SSDs\
-Best for: Databases, OS disks, low-latency apps
+**Example**: AWS EBS, Google Persistent Disk, local SSDs\
+
+**Best for**: Databases, OS disks, low-latency apps
 
 🗂️ **File Storage** - Hierarchical file and folder structure with standard protocols (NFS, SMB). Supports permissions and shared access. Best for traditional applications needing file paths.
 
-> Example: AWS EFS, Azure Files, Google Filestore, on-prem NAS\
-Best for: Shared folders, file-based apps
+**Example**: AWS EFS, Azure Files, Google Filestore, on-prem NAS\
+
+**Best for**: Shared folders, file-based apps
 
 🧺 **Object Storage** - Stores data as objects with rich metadata and unique IDs. Accessed via HTTP APIs. Highly scalable, great for unstructured data like images and backups.
 
-> Example: AWS S3, Cloudflare R2, Google Cloud Storage, Hetzner Storage Box\
-Best for: Scalable storage for unstructured data
+**Example**: AWS S3, Cloudflare R2, Google Cloud Storage, Hetzner Storage Box\
+
+**Best for**: Scalable storage for unstructured data
 
 
 | Feature              | Object Storage                                                                 | Block Storage                                                                              | Cloud File Storage                                                                     |
@@ -49,12 +52,12 @@ Each object is stored in a bucket.
 🪣 **Bucket** - container that holds objects — similar to a folder but without hierarchy. They help organize objects by project, user, application, or use case. Access permissions, region settings, and versioning policies can be applied at the bucket level.
 
 1. Object storage is accessed via standard HTTP-based APIs.
-2. Metadata plays crutial role for filtering, organazing and classification of objects.
-3. Object storage systems are built to be highly durable and scalable. Objects are stored across multiple servers or data centers using replication or erasure coding => fault tolerance, scalability, build-in versioning.
+2. Metadata plays crutial role for filtering, organizing, and classification of objects.
+3. Object storage systems are built to be highly durable and scalable. Objects are stored across multiple servers or data centers using replication or erasure coding => fault tolerance, scalability, built-in versioning.
 4. Designed for cost-Efficiency and massive scale. Object storage is typically low-cost and optimized for large volumes of unstructured data.
 5. Access is done through an API.
 
-### How It’s Used in Practice
+## How It’s Used in Practice
 
 1. _Data Lake Storage_
 
@@ -84,7 +87,7 @@ Each object is stored in a bucket.
 
    Cloud object storage is excellent for long-term data retention. It is cheap, has long retention and immutable by default.
 
-### Solutions in the market
+## Solutions in the market
 
 | Provider         | Service Name              | Notes                                                                 |
 |------------------|---------------------------|-----------------------------------------------------------------------|
@@ -104,18 +107,24 @@ Each object is stored in a bucket.
 | SeaweedFS        | SeaweedFS                 | Efficient file + object hybrid storage, lightweight and fast         |
 
     NOTE: Wasabi also has no egress fees: https://wasabi.com/cloud-object-storage. The data is stored in Wasabi's own servers inside top-tier colocation facilities.
-    
-### Why S3 is an industry standard solution?
 
-- _First mover_: Launched in 2006, pioneered cloud object storage.
-- _S3 API became universal_: Most tools and services support it natively.
-- _Ecosystem integration_: Deeply connected to AWS (Lambda, CloudFront, Athena, etc.).
-- _Global scale_: Backed by Amazon’s massive infrastructure.
-- _Enterprise trust_: Proven durability, security, and compliance over decades.
+---
+
+## Amazon S3
+
+### Why is S3 an industry-standard solution?
+
+- 🥇 _First mover_: Launched in 2006, pioneered cloud object storage.
+- 🌐 _S3 API became universal_: Most tools and services support it natively.
+- ♻️ _Ecosystem integration_: Deeply connected to AWS (Lambda, CloudFront, Athena, etc.).
+- 🌍 _Global scale_: Backed by Amazon’s massive infrastructure.
+- 🫂 _Enterprise trust_: Proven durability, security, and compliance over decades.
 
 ### S3 Architecture
 
-### Big Cloud-Native Companies That Use S3
+    TODO
+
+### Companies That Use S3
 
 A lot of companies leverage S3 under the hood of their architectures. 
 
@@ -147,14 +156,14 @@ A lot of companies leverage S3 under the hood of their architectures.
 
    Source: [Amazon Website](https://aws.amazon.com/solutions/case-studies/innovators/pinterest/)
   
-   Pinterest’s platform relies heavily on Amazon S3 for storing user-generated content, such as images and videos.
+   Pinterest’s platform relies heavily on Amazon S3 to store user-generated content, such as images and videos.
 
 6. 💭 _Salesforce_
 
    Source: [Amazon Website](https://aws.amazon.com/solutions/case-studies/innovators/salesforce/#:~:text=Salesforce%20launched%20Hyperforce%20on%20AWS,residency%20and%20data%20sovereignty%20regulations.)
   
-  Salesforce utilizes Amazon S3 for storing backups, logs, and static assets across various services.
-
+   Salesforce utilizes Amazon S3 to store backups, logs, and static assets across various services.
+ 
 ### Amazon S3 Storage Pricing (April 2025)
 
 Source: [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/)
@@ -193,7 +202,6 @@ Source: [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/)
 
  **Egress** - In networking terminology, egress refers to outbound data transfer from a network to another network or an individual server. For cloud providers, this means data that is transferred from one cloud provider’s data centers to the public internet, another cloud provider, or to your own infrastructure.
  
-
 Charges apply in the following scenarios:
  
 - Data transferred **OUT From Amazon S3 To Internet**.
@@ -210,7 +218,91 @@ Data transfers are free in these cases:
 - Data transferred **out to the internet** for the first 100GB per month, aggregated across all AWS Services and Regions (except China and GovCloud)
 - Data transferred **in from the internet**.
 - Data transferred **from an Amazon S3 bucket to any AWS service(s) within the same AWS Region as the S3 bucket** (including to a different account in the same AWS Region).
- 
+
+---
+
+## Cloudflare R2
+
+Cloudflare R2 presents a compelling alternative to traditional object storage solutions, particularly for applications with high data transfer requirements. Its integration with Cloudflare’s global network and serverless compute platform offers developers a powerful and cost-effective storage solution.
+
+Sources: [Cloudflare R2 documentation](https://developers.cloudflare.com/r2/), [Cloudflare R2 website](https://www.cloudflare.com/en-gb/developer-platform/products/r2/?utm_source=chatgpt.com)
+
+### Why is R2 a Disruptive Alternative to S3?
+
+Source: [Medium](https://y-consulting.medium.com/cloudflare-r2-vs-the-big-3-a-deep-dive-into-cost-and-technical-efficiency-of-cloud-storage-c1644c61a0d3)
+
+- 🚫 **Zero Egress Fees**: Unlike traditional cloud providers, Cloudflare R2 eliminates data transfer (egress) fees, making it highly cost-effective for data-intensive applications.
+- 🔄 **S3-Compatible API**: R2 supports the S3 API, facilitating seamless migration and integration with existing tools and workflows.
+- 🌐 **Global Edge Network**: Leveraging Cloudflare’s extensive global network, R2 ensures low-latency data access worldwide.  ￼
+- 🧩 **Integrated Ecosystem**: R2 integrates natively with Cloudflare Workers, enabling serverless compute operations directly on stored data.  ￼
+- 📊 **Predictable Pricing**: With transparent and straightforward pricing, R2 offers a cost-effective solution without hidden fees.  ￼
+
+### R2 Architecture
+
+Cloudflare R2 is designed for modern, distributed applications requiring scalable and efficient object storage. Key architectural features include:
+- **Edge-Optimized Storage**: Data is stored and served from locations close to end-users, reducing latency.
+- **Serverless Integration**: Tight integration with Cloudflare Workers allows for real-time data processing and transformation at the edge.
+- **Event-Driven Workflows**: R2 supports event notifications, enabling automated responses to data changes, such as triggering functions upon object creation or deletion.  ￼
+- **Secure Access Controls**: Features like signed URLs, bucket-level permissions, and integration with Cloudflare Access provide robust security mechanisms.  ￼
+
+      TODO: more research 
+
+### Companies That Use R2
+
+Several organizations leverage Cloudflare R2 for its performance and cost benefits:
+
+1. 📈 **LunarCrush**
+
+    Source: [R2 website](https://workers.cloudflare.com/built-with/projects/lunarcrush)
+
+    Utilizes R2 to avoid unexpected egress costs, ensuring predictable expenses even during traffic surges.  ￼
+   
+2. 🎨 **Canva** 
+
+    Sources: [Canva website](https://canvaplugin.com/how-to-connect-canva-to-cloudflare/#:~:text=Canva's%20partnership%20with%20Cloudflare%20began,serverless%20development%2C%20and%20bot%20management.), [R2 website](https://www.cloudflare.com/en-gb/developer-platform/products/r2/)
+
+    Employs R2 for scalable storage needs, benefiting from its integration with Cloudflare’s global network. ￼
+
+4. 🍕 **DeliveryHero**
+
+    Source: [R2 website](https://www.cloudflare.com/en-gb/case-studies/delivery-hero/)
+
+    Leverages R2 to efficiently manage and deliver content across various regions.
+
+       TODO: more research 
+
+Cloudflare R2 Storage Pricing (April 2025)
+
+Storage Class	Price per GB/Month	Notes
+Standard Storage	$0.015	Suitable for frequently accessed data.
+Infrequent Access	$0.010	Optimized for data accessed less frequently.
+
+       TODO: more research 
+
+Cloudflare R2 Operation and Data Transfer Pricing
+
+Operation Type	Price per Million Requests	Notes
+Class A Operations	$4.50	Includes operations like PUT, POST, and DELETE.
+Class B Operations	$0.36	Includes operations like GET and LIST.
+Data Retrieval (IA)	$0.01 per GB	Applies to Infrequent Access storage class.
+Egress to Internet	Free	No charges for data transferred out to the internet.
+
+       TODO: more research 
+
+Free Tier:
+
+Resource	Monthly Free Usage
+Storage	10 GB
+Class A Operations	1 million requests
+Class B Operations	10 million requests
+Egress to Internet	Unlimited
+
+       TODO: more research 
+
+
+
+
+
 
 # Financial Analysis
 
