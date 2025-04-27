@@ -122,9 +122,7 @@ Each object is stored in a bucket.
 
 ### S3 Architecture
 
-    <img width="663" alt="image" src="https://github.com/user-attachments/assets/7355b1c2-8f34-4d1a-8cd1-d8480f75c623" />
-
-# Amazon S3 Overview
+    ![image](https://github.com/user-attachments/assets/c3d2259e-850f-4d56-b92e-44fa7a8c7826)
 
 - 🛢️ Storage Model
   - Data is stored as objects inside buckets.
@@ -150,7 +148,7 @@ Each object is stored in a bucket.
     - `DELETE`
     - `LIST`
     - `COPY`
-- APIs are designed for high concurrency and **strong consistency** (available after the 2020 update).
+  - APIs are designed for high concurrency and **strong consistency** (available after the 2020 update).
 
 - 🧩 Service Integration
   - S3 integrates natively with many AWS services:
@@ -221,6 +219,8 @@ A lot of companies leverage S3 under the hood of their architectures.
 
 Source: [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/)
 
+Pricing depends on the region.
+
 | Storage Class                         | Tier / Description                                         | Price                    |
 |--------------------------------------|------------------------------------------------------------|--------------------------|
 | **S3 Standard**                      | First 50 TB / Month                                        | $0.023 per GB            |
@@ -247,6 +247,49 @@ Source: [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/)
 - \* Intelligent-Tiering includes automatic cost optimization based on access patterns.
 - \** "IA" = Infrequent Access – designed for long-lived, less frequently accessed data.
 - \*** Glacier classes are suitable for archival and backup use cases with varying retrieval speeds.
+
+
+### Amazon S3 operations pricing (April 2025)
+
+Pricing depends on the region.
+
+### Amazon S3 Operations Pricing (April 2025)
+
+Source: [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/)
+
+| Storage Class                         | PUT, COPY, POST, LIST (per 1,000 requests) | GET, SELECT, Other (per 1,000 requests) | Lifecycle Transition (per 1,000 requests) | Data Retrieval Requests (per 1,000 requests) | Data Uploads (per GB) | Data Retrievals (per GB) |
+|----------------------------------------|--------------------------------------------|-----------------------------------------|--------------------------------------------|-----------------------------------------------|------------------------|---------------------------|
+| **S3 Standard**                       | $0.005                                     | $0.0004                                 | n/a                                        | n/a                                           | n/a                    | n/a                       |
+| **S3 Intelligent-Tiering** *           | $0.005                                     | $0.0004                                 | $0.01                                      | n/a                                           | n/a                    | n/a                       |
+| Frequent Access                       | n/a                                        | n/a                                     | n/a                                        | n/a                                           | n/a                    | n/a                       |
+| Infrequent Access                     | n/a                                        | n/a                                     | n/a                                        | n/a                                           | n/a                    | n/a                       |
+| Archive Instant                       | n/a                                        | n/a                                     | n/a                                        | n/a                                           | n/a                    | n/a                       |
+| Archive Access, Standard              | n/a                                        | n/a                                     | n/a                                        | n/a                                           | n/a                    | n/a                       |
+| Archive Access, Bulk                  | n/a                                        | n/a                                     | n/a                                        | n/a                                           | n/a                    | n/a                       |
+| Archive Access, Expedited             | n/a                                        | n/a                                     | n/a                                        | $10.00                                        | n/a                    | $0.03                     |
+| Deep Archive Access, Standard         | n/a                                        | n/a                                     | n/a                                        | n/a                                           | n/a                    | n/a                       |
+| Deep Archive Access, Bulk             | n/a                                        | n/a                                     | n/a                                        | n/a                                           | n/a                    | n/a                       |
+| **S3 Standard-Infrequent Access** **   | $0.01                                      | $0.001                                  | $0.01                                      | n/a                                           | n/a                    | $0.01                     |
+| **S3 Express One Zone**                | $0.00113                                   | $0.00003                                | n/a                                        | n/a                                           | $0.0032                | $0.0006                   |
+| **S3 Glacier Instant Retrieval** ***   | $0.02                                      | $0.01                                   | $0.02                                      | n/a                                           | n/a                    | $0.03                     |
+| **S3 Glacier Flexible Retrieval** ***  | $0.03                                      | $0.0004                                 | $0.03                                      | See below                                    | n/a                    | See below                 |
+| Expedited                             | n/a                                        | n/a                                     | n/a                                        | $10.00                                        | n/a                    | $0.03                     |
+| Standard                              | n/a                                        | n/a                                     | n/a                                        | $0.05                                         | n/a                    | $0.01                     |
+| Bulk ***                              | n/a                                        | n/a                                     | n/a                                        | n/a                                           | n/a                    | n/a                       |
+| Provisioned Capacity Unit ****        | n/a                                        | n/a                                     | n/a                                        | n/a                                           | n/a                    | $100.00 per unit          |
+| **S3 Glacier Deep Archive** ***        | $0.05                                      | $0.0004                                 | $0.05                                      | See below                                    | n/a                    | See below                 |
+| Standard                              | n/a                                        | n/a                                     | n/a                                        | $0.10                                         | n/a                    | $0.02                     |
+| Bulk                                  | n/a                                        | n/a                                     | n/a                                        | $0.025                                        | n/a                    | $0.0025                   |
+| **S3 One Zone-Infrequent Access** **   | $0.01                                      | $0.001                                  | $0.01                                      | n/a                                           | n/a                    | n/a                       |
+
+---
+
+**Notes**:
+- \* S3 Intelligent-Tiering includes automatic cost optimization.
+- \** "IA" = Infrequent Access.
+- \*** Glacier classes vary by retrieval speed and pricing.
+- \**** Provisioned capacity units ensure expedited retrieval capacity.
+
 
 
 ### Amazon S3 data transfer pricing (April 2025)
@@ -338,7 +381,7 @@ Several organizations leverage Cloudflare R2 for its performance and cost benefi
 
      Utilizes R2 to scale globally without worrying about traffic surges, infrastructure limits, or surprise egress costs.  ￼
 
-     | "No egress fees is a big advantage, as surprise costs from surging traffic can be annoying. As a startup, one has to be careful about surging costs for DDoS or viral traffic, but with Cloudflare, these worries are eliminated. Thanks to Cloudflare, startups don’t need to scale up dramatically or set up their own servers. This results in significant cost savings and eliminates the need for their own infrastructure."
+     > "No egress fees is a big advantage, as surprise costs from surging traffic can be annoying. As a startup, one has to be careful about surging costs for DDoS or viral traffic, but with Cloudflare, these worries are eliminated. Thanks to Cloudflare, startups don’t need to scale up dramatically or set up their own servers. This results in significant cost savings and eliminates the need for their own infrastructure."
    
 3. 🎨 **Canva** 
 
@@ -357,32 +400,44 @@ Several organizations leverage Cloudflare R2 for its performance and cost benefi
 
 Source: [Cloudflare R2 Pricing page](https://developers.cloudflare.com/r2/pricing/)
 
+**1. Normal Tier:**
+
 | Storage Class                         | Tier / Description                                         | Price                    |
 |--------------------------------------|------------------------------------------------------------|--------------------------|
 | **Standard Storage**                 | General-purpose object storage                             | $0.015 per GB             |
-| **Infrequent Access (IA)**           | For data accessed less frequently                          | $0.010 per GB             |
+| **Infrequent Access**                | For data accessed less frequently                          | $0.010 per GB             |
 
----
+**2. Free Tier**
+
+| Storage Class                         | Tier / Description                                         | Price                    |
+|--------------------------------------|------------------------------------------------------------|--------------------------|
+| **Free Tier**                        | If stored less then 10GB / month                           | Free                      |
 
 **Notes**:
 - No need to configure different storage classes manually — R2 automatically charges based on access frequency if Infrequent Access is enabled.
-- No storage retrieval fees for Standard Storage; IA has small retrieval fees (see below).
-
----
+  
 
 ### Cloudflare R2 Operation and Data Transfer Pricing (April 2025)
 
 Source: [Cloudflare R2 Pricing page](https://developers.cloudflare.com/r2/pricing/)
 
-**Egress** - In networking terminology, egress refers to outbound data transfer from a network to another network or an individual server. For cloud providers, this usually incurs costs — but **Cloudflare R2 offers free egress**.
-
 Charges apply mainly for operations:
 
-| Operation Type           | Price per Million Requests | Notes                                                    |
+**1. Normal Tier:**
+
+| Operation Type            | Standard Class              | Infrequent Access              | Notes                                                    |
+|---------------------------|----------------------------|----------------------------|----------------------------------------------------------|
+| **Class A Operations**       | $4.50 / million requests   | $9.0 / million requests   | Includes PUT, POST, DELETE (modifying data).           |
+| **Class B Operations**       | $0.36 / million requests   | $0.9 / million requests   | Includes GET, LIST (reading data).                     |
+| **Data Retrieval**           | None                       | $0.1 / million requests   | Processing data.                                       |
+
+**2. Free Tier**
+
+| Operation Type            | Requirement             | Notes                                                    |
 |---------------------------|----------------------------|----------------------------------------------------------|
-| **Class A Operations**    | $4.50                      | Includes PUT, POST, DELETE (modifying data).             |
-| **Class B Operations**    | $0.36                      | Includes GET, LIST (reading data).                       |
-| **Data Retrieval (IA Tier)** | $0.01 per GB               | Applies only when retrieving from Infrequent Access tier.|
+| **Class A Operations**       | If less than 1 million requests per month   | Includes PUT, POST, DELETE (modifying data).  |
+| **Class B Operations**       | If less than 10 million requests per month  | Includes GET, LIST (reading data).            |
+| **Data Retrieval**           | None                       | Processing data.                                       |
 
 Data transfers are **free** in these cases:
 
@@ -390,12 +445,7 @@ Data transfers are **free** in these cases:
 - Data transferred **within Cloudflare’s network** (e.g., to Workers, CDN, Pages) is free.
 - No charges for data **ingress** (uploading into R2).
 
----
-
-**Summary**:
-- R2 charges mainly for **storage and request operations**.
-- **No egress fees** for sending data to users or other services — a major cost advantage over traditional cloud providers.
-- **Simple, flat pricing** compared to the tiered models of S3.
+**Simple, flat pricing** compared to the tiered models of S3.
 
 ---
 
@@ -416,7 +466,21 @@ Data transfers are **free** in these cases:
 | 💬 Other Notes          | Massive ecosystem, enterprise support, strong consistency model.| Great for cost-saving at scale, especially for public-facing workloads. |
 
 
+## 💵 S3 vs R2 — Pricing Comparison (April 2025)
 
+| Aspect                         | Amazon S3                                    | Cloudflare R2                                |
+|--------------------------------|----------------------------------------------|---------------------------------------------|
+| Storage Cost (Standard)        | ~$0.023 per GB/month (first 50 TB)           | $0.015 per GB/month                         |
+| Storage Cost (Infrequent Access) | ~$0.0125 per GB/month (S3 Standard-IA)       | $0.010 per GB/month (IA optional in R2)     |
+| Storage Cost (Deep Archive)    | ~$0.00099 per GB/month (S3 Deep Archive)     | Not a separate tier (only IA for cold data) |
+| PUT / POST / DELETE Operations | ~$5.00 per million (PUT, POST)               | ~$4.50 per million (Class A operations)     |
+| GET / LIST Operations          | ~$0.40 per million (GET, LIST)               | ~$0.36 per million (Class B operations)     |
+| Egress to Internet             | $0.09/GB (first 10 TB/month)                 | Free                                         |
+| Intra-region Transfer (S3 to EC2/Lambda/etc.) | Free                              | Free (within Cloudflare’s network)          |
+| Retrieval Cost (Cold Storage)  | Varies (e.g., $0.01/GB from S3 IA)           | $0.01/GB for retrieval from Infrequent Access |
+| Free Tier                      | 5 GB storage + 20,000 GET + 2,000 PUT requests per month | 10 GB storage + 1M Class A + 10M Class B ops + unlimited egress |
+
+---
 
 # Financial Analysis
 
