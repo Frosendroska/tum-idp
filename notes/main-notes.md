@@ -122,7 +122,60 @@ Each object is stored in a bucket.
 
 ### S3 Architecture
 
-    TODO
+    <img width="663" alt="image" src="https://github.com/user-attachments/assets/7355b1c2-8f34-4d1a-8cd1-d8480f75c623" />
+
+# Amazon S3 Overview
+
+- 🛢️ Storage Model
+  - Data is stored as objects inside buckets.
+  - Each object includes:
+    - The data itself (binary blob)
+    - Metadata (system and user-defined)
+    - A unique key (object name)
+
+- 🏗️ Physical Storage
+  - Objects are automatically replicated across multiple Availability Zones (AZs) within a region.
+  - This replication ensures **11 nines (99.999999999%) durability**.
+  - Storage hardware is abstracted — users never deal directly with disks or servers.
+
+- 🗺️ Namespace and Structure
+  - S3 uses a **flat namespace** — “folders” are simulated using object key prefixes (e.g., `photos/2025/04/image.jpg`).
+  - There is no real hierarchy like in a traditional file system.
+
+- 🌐 Access Layer (API)
+  - Users and services access objects via the **S3 REST API** or **AWS SDKs**.
+  - Supports operations like:
+    - `GET`
+    - `PUT`
+    - `DELETE`
+    - `LIST`
+    - `COPY`
+- APIs are designed for high concurrency and **strong consistency** (available after the 2020 update).
+
+- 🧩 Service Integration
+  - S3 integrates natively with many AWS services:
+    - CloudFront (CDN delivery)
+    - Lambda (serverless processing)
+    - Athena (SQL over S3)
+    - Redshift Spectrum (external tables)
+    - EventBridge and SNS (event-driven actions)
+
+- 🔐 Security
+  - Supports:
+    - Bucket policies
+    - IAM roles/policies
+    - Access control lists (ACLs)
+    - Object ownership settings
+  - Encryption options:
+    - **Server-Side Encryption with S3 Managed Keys (SSE-S3)**
+    - **Server-Side Encryption with KMS Managed Keys (SSE-KMS)**
+    - **Client-Side Encryption**
+
+- 🏎️ Performance Features
+  - **Multi-part upload** for large objects.
+  - **Byte-range retrieval** for partial downloads.
+  - **Transfer Acceleration** for faster uploads via CloudFront edge locations.
+  - **Intelligent-Tiering** to automatically move data to cheaper storage classes based on access patterns.
 
 ### Companies That Use S3
 
@@ -239,13 +292,41 @@ Source: [Medium](https://y-consulting.medium.com/cloudflare-r2-vs-the-big-3-a-de
 
 ### R2 Architecture
 
-Cloudflare R2 is designed for modern, distributed applications requiring scalable and efficient object storage. Key architectural features include:
-- **Edge-Optimized Storage**: Data is stored and served from locations close to end-users, reducing latency.
-- **Serverless Integration**: Tight integration with Cloudflare Workers allows for real-time data processing and transformation at the edge.
-- **Event-Driven Workflows**: R2 supports event notifications, enabling automated responses to data changes, such as triggering functions upon object creation or deletion.  ￼
-- **Secure Access Controls**: Features like signed URLs, bucket-level permissions, and integration with Cloudflare Access provide robust security mechanisms.  ￼
+- 🛢️ **Storage Model**:
+  - Data is stored as **objects** inside **buckets**.
+  - Each object contains the data, metadata, and a unique key (object name).
+  - Fully S3 API-compatible, making migration from S3 seamless.
 
-      TODO: more research 
+- 🏗️ **Physical Storage**:
+  - Distributed across **Cloudflare’s global network of edge data centers**.
+  - Optimized for low-latency access but centralized for consistency — not full replication at every edge.
+  - Designed to minimize cost by eliminating traditional region-based storage complexity.
+
+- 🗺️ **Namespace and Structure**:
+  - Uses a **flat namespace** like S3 (no true folders, only key prefixes).
+  - Public and private buckets supported.
+  - Easy integration with access control and versioning features.
+
+- 🌐 **Access Layer (API)**:
+  - Provides a **fully S3-compatible API**.
+  - Supports standard operations like `PUT`, `GET`, `DELETE`, `LIST`.
+  - Integrates with Cloudflare Workers for serverless compute close to storage.
+
+- 🧩 **Service Integration**:
+  - Tight integration with **Cloudflare Workers** for in-flight data processing.
+  - Works naturally with **Cloudflare Stream**, **Pages**, and **Zero Trust** for secure delivery.
+  - Can serve content directly via **Cloudflare CDN** without egress fees.
+
+- 🔐 **Security**:
+  - Fine-grained bucket policies and object permissions.
+  - Supports **signed URLs** for temporary public access.
+  - Integrated with Cloudflare’s global security services (WAF, DDoS protection).
+
+- 🏎️ **Performance Features**:
+  - **Edge-based caching** available automatically when serving objects through Cloudflare CDN.
+  - **No egress fees** makes direct delivery to users cheap and scalable.
+  - Event-driven architecture supported (object creation triggers via Workers).
+
 
 ### Companies That Use R2
 
@@ -255,51 +336,84 @@ Several organizations leverage Cloudflare R2 for its performance and cost benefi
 
      Source: [R2 website](https://workers.cloudflare.com/built-with/projects/lunarcrush)
 
-     Utilizes R2 to avoid unexpected egress costs, ensuring predictable expenses even during traffic surges.  ￼
+     Utilizes R2 to scale globally without worrying about traffic surges, infrastructure limits, or surprise egress costs.  ￼
+
+     | "No egress fees is a big advantage, as surprise costs from surging traffic can be annoying. As a startup, one has to be careful about surging costs for DDoS or viral traffic, but with Cloudflare, these worries are eliminated. Thanks to Cloudflare, startups don’t need to scale up dramatically or set up their own servers. This results in significant cost savings and eliminates the need for their own infrastructure."
    
-2. 🎨 **Canva** 
+3. 🎨 **Canva** 
 
      Sources: [Canva website](https://canvaplugin.com/how-to-connect-canva-to-cloudflare/#:~:text=Canva's%20partnership%20with%20Cloudflare%20began,serverless%20development%2C%20and%20bot%20management.), [R2 website](https://www.cloudflare.com/en-gb/developer-platform/products/r2/)
 
-    Employs R2 for scalable storage needs, benefiting from its integration with Cloudflare’s global network. ￼
+    Chose R2 for faster, more secure hosting with free DDoS protection, CDN performance, and serverless development.
 
-4. 🍕 **DeliveryHero**
+5. 🍕 **DeliveryHero**
 
      Source: [R2 website](https://www.cloudflare.com/en-gb/case-studies/delivery-hero/)
 
-     Leverages R2 to efficiently manage and deliver content across various regions.
+     Leverages R2 to simplify security for remote work, protect against cyberattacks, and handle global traffic surges efficiently across its public apps and internal systems.
 
-       TODO: more research 
 
 ### Cloudflare R2 Storage Pricing (April 2025)
 
-Storage Class	Price per GB/Month	Notes
-Standard Storage	$0.015	Suitable for frequently accessed data.
-Infrequent Access	$0.010	Optimized for data accessed less frequently.
+Source: [Cloudflare R2 Pricing page](https://developers.cloudflare.com/r2/pricing/)
 
-       TODO: more research 
+| Storage Class                         | Tier / Description                                         | Price                    |
+|--------------------------------------|------------------------------------------------------------|--------------------------|
+| **Standard Storage**                 | General-purpose object storage                             | $0.015 per GB             |
+| **Infrequent Access (IA)**           | For data accessed less frequently                          | $0.010 per GB             |
 
-### Cloudflare R2 Operation and Data Transfer Pricing
+---
 
-Operation Type	Price per Million Requests	Notes
-Class A Operations	$4.50	Includes operations like PUT, POST, and DELETE.
-Class B Operations	$0.36	Includes operations like GET and LIST.
-Data Retrieval (IA)	$0.01 per GB	Applies to Infrequent Access storage class.
-Egress to Internet	Free	No charges for data transferred out to the internet.
+**Notes**:
+- No need to configure different storage classes manually — R2 automatically charges based on access frequency if Infrequent Access is enabled.
+- No storage retrieval fees for Standard Storage; IA has small retrieval fees (see below).
 
-       TODO: more research 
+---
 
-### Free Tier:
+### Cloudflare R2 Operation and Data Transfer Pricing (April 2025)
 
-Resource	Monthly Free Usage
-Storage	10 GB
-Class A Operations	1 million requests
-Class B Operations	10 million requests
-Egress to Internet	Unlimited
+Source: [Cloudflare R2 Pricing page](https://developers.cloudflare.com/r2/pricing/)
 
-       TODO: more research 
+**Egress** - In networking terminology, egress refers to outbound data transfer from a network to another network or an individual server. For cloud providers, this usually incurs costs — but **Cloudflare R2 offers free egress**.
 
+Charges apply mainly for operations:
 
+| Operation Type           | Price per Million Requests | Notes                                                    |
+|---------------------------|----------------------------|----------------------------------------------------------|
+| **Class A Operations**    | $4.50                      | Includes PUT, POST, DELETE (modifying data).             |
+| **Class B Operations**    | $0.36                      | Includes GET, LIST (reading data).                       |
+| **Data Retrieval (IA Tier)** | $0.01 per GB               | Applies only when retrieving from Infrequent Access tier.|
+
+Data transfers are **free** in these cases:
+
+- Data transferred **out to the internet** is **always free** (no egress charges).
+- Data transferred **within Cloudflare’s network** (e.g., to Workers, CDN, Pages) is free.
+- No charges for data **ingress** (uploading into R2).
+
+---
+
+**Summary**:
+- R2 charges mainly for **storage and request operations**.
+- **No egress fees** for sending data to users or other services — a major cost advantage over traditional cloud providers.
+- **Simple, flat pricing** compared to the tiered models of S3.
+
+---
+
+## S3 vs R2 — Architecture Comparison
+
+| Aspect                | Amazon S3                                         | Cloudflare R2                                     |
+|------------------------|--------------------------------------------------|--------------------------------------------------|
+| 🛢️ Storage Model       | Centralized per-region object storage.            | Globalized object storage via Cloudflare's edge network. |
+|                        | Data is stored in AWS regions (e.g., us-east-1). | Data is accessible globally, but still primarily stored centrally. |
+|                        | Explicit region selection during bucket creation.| No need to pick a region — Cloudflare handles routing. |
+| 🏗️ Physical Storage     | Replicates data across multiple AZs inside a region.| Centralized storage locations, optimized for low egress and fast CDN serving. |
+| 🗺️ Namespace Structure  | Flat namespace; folders simulated with prefixes. | Flat namespace; folders simulated with prefixes. |
+| 🌐 API Access           | S3 REST API, AWS SDKs.                            | Fully S3-compatible API (can reuse existing S3 code). |
+| 🧩 Service Integration  | Deep integration with AWS services (Lambda, Athena, Redshift, etc.). | Deep integration with Cloudflare Workers, CDN, Pages, and Stream. |
+| 🔐 Security             | IAM policies, ACLs, bucket policies, encryption options (SSE-S3, SSE-KMS). | Bucket-level permissions, signed URLs, integrated DDoS/WAF protection. |
+| 🏎️ Performance Features | Multi-part uploads, byte-range retrievals, Transfer Acceleration. | Edge caching via CDN, event-driven triggers via Workers. |
+| 💵 Egress Cost          | Egress to Internet is expensive ($0.09/GB for first 10TB). | No egress cost to Internet — **free egress**. |
+| 💬 Other Notes          | Massive ecosystem, enterprise support, strong consistency model.| Great for cost-saving at scale, especially for public-facing workloads. |
 
 
 
