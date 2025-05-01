@@ -7,6 +7,21 @@ Identify key performance indicators (KPIs) such as latency, egress costs, and AP
 ## Overview
 This phase focuses on understanding the current landscape of cloud object storage solutions, with particular emphasis on AWS S3 and Cloudflare R2. The goal is to establish a solid foundation for subsequent analysis by identifying key characteristics, capabilities, and limitations of each solution.
 
+## Table of Contents
+1. [Block vs File vs Object Storage](#block-vs-file-vs-object-storage)
+2. [Object Storage Fundamentals](#object-storages)
+3. [Use Cases in Practice](#how-its-used-in-practice)
+4. [Market Solutions Overview](#solutions-in-the-market)
+5. [Amazon S3 Deep Dive](#amazon-s3)
+   - [Why S3 is Industry Standard](#why-is-s3-an-industry-standard-solution)
+   - [S3 Architecture](#s3-architecture)
+   - [Companies Using S3](#companies-that-use-s3)
+6. [Cloudflare R2 Deep Dive](#cloudflare-r2)
+   - [Why R2 is Disruptive](#why-is-r2-a-disruptive-alternative-to-s3)
+   - [R2 Architecture](#r2-architecture)
+   - [Companies Using R2](#companies-that-use-r2)
+7. [Architecture Comparison](#s3-vs-r2--architecture-comparison)
+
 ## Block vs File vs Object storage
 
 Sources: [AWS Blog](https://aws.amazon.com/compare/the-difference-between-block-file-object-storage/)
