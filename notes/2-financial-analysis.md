@@ -7,6 +7,41 @@ Evaluate pricing models and potential hidden costs of using Cloudflare R2.
 ## Overview
 This phase focuses on conducting a comprehensive financial analysis of AWS S3 and Cloudflare R2, with particular attention to total cost of ownership (TCO) and potential cost savings. The analysis will consider various real-world scenarios and integration patterns with major cloud providers.
 
+## Key Areas of Analysis
+1. Total Cost of Ownership (TCO)
+   - Storage costs
+   - Data transfer costs
+   - API operation costs
+   - Management and maintenance costs
+   - Integration costs
+
+2. Real-World Use Cases
+   - Data lake storage
+   - Content delivery
+   - Backup and archival
+   - Application data storage
+   - Media storage and delivery
+
+3. Multi-Cloud Integration Analysis
+   - AWS integration costs and benefits
+   - Google Cloud integration costs and benefits
+   - Microsoft Azure integration costs and benefits
+   - Cross-cloud data transfer costs
+
+4. Risk Assessment
+   - Vendor lock-in considerations
+   - Service availability and reliability
+   - Data sovereignty and compliance
+   - Future pricing changes
+   - Integration complexity
+
+5. Hidden Costs Evaluation
+   - Data retrieval costs
+   - API request costs
+   - Cross-region transfer costs
+   - Management overhead
+   - Training and documentation costs
+
 ## Amazon S3 Pricing (April 2025)
 
 Source: [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/)
@@ -137,41 +172,6 @@ Data transfers are **free** in these cases:
 | Intra-region Transfer (S3 to EC2/Lambda/etc.) | Free                              | Free (within Cloudflare's network)          |
 | Retrieval Cost (Cold Storage)  | Varies (e.g., $0.01/GB from S3 IA)           | $0.01/GB for retrieval from Infrequent Access |
 | Free Tier                      | 5 GB storage + 20,000 GET + 2,000 PUT requests per month | 10 GB storage + 1M Class A + 10M Class B ops + unlimited egress |
-
-## Key Areas of Analysis
-1. Total Cost of Ownership (TCO)
-   - Storage costs
-   - Data transfer costs
-   - API operation costs
-   - Management and maintenance costs
-   - Integration costs
-
-2. Real-World Use Cases
-   - Data lake storage
-   - Content delivery
-   - Backup and archival
-   - Application data storage
-   - Media storage and delivery
-
-3. Multi-Cloud Integration Analysis
-   - AWS integration costs and benefits
-   - Google Cloud integration costs and benefits
-   - Microsoft Azure integration costs and benefits
-   - Cross-cloud data transfer costs
-
-4. Risk Assessment
-   - Vendor lock-in considerations
-   - Service availability and reliability
-   - Data sovereignty and compliance
-   - Future pricing changes
-   - Integration complexity
-
-5. Hidden Costs Evaluation
-   - Data retrieval costs
-   - API request costs
-   - Cross-region transfer costs
-   - Management overhead
-   - Training and documentation costs
 
 ## Timeline
 - April 2025: Complete TCO analysis for all use cases
