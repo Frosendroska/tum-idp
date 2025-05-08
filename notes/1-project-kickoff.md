@@ -1,30 +1,71 @@
 # Project Kickoff & Literature Review
 
-> Research existing object storage solutions and cost structures.\
+> Research existing object storage solutions.\
 Define evaluation criteria for comparing AWS S3 and Cloudflare R2.\
 Identify key performance indicators (KPIs) such as latency, egress costs, and API compatibility.
 
 ## Overview
-This phase focuses on understanding the current landscape of cloud object storage solutions, with particular emphasis on AWS S3 and Cloudflare R2. The goal is to establish a solid foundation for subsequent analysis by identifying key characteristics, capabilities, and limitations of each solution.
+This phase focuses on understanding the current landscape of cloud object storage solutions, with particular emphasis on AWS S3 and Cloudflare R2.
+The goal is to establish a solid foundation for subsequent analysis by identifying key characteristics, capabilities, and limitations of each solution. 
+Here we skip the financial analysisю
 
 ## Table of Contents
 1. [Block vs File vs Object Storage](#block-vs-file-vs-object-storage)
-2. [Object Storage Fundamentals](#object-storages)
-3. [Use Cases in Practice](#how-its-used-in-practice)
-4. [Market Solutions Overview](#solutions-in-the-market)
-5. [Amazon S3 Deep Dive](#amazon-s3)
-   - [Why S3 is Industry Standard](#why-is-s3-an-industry-standard-solution)
-   - [S3 Architecture](#s3-architecture)
-   - [Companies Using S3](#companies-that-use-s3)
-6. [Cloudflare R2 Deep Dive](#cloudflare-r2)
-   - [Why R2 is Disruptive](#why-is-r2-a-disruptive-alternative-to-s3)
-   - [R2 Architecture](#r2-architecture)
-   - [Companies Using R2](#companies-that-use-r2)
-7. [Architecture Comparison](#s3-vs-r2--architecture-comparison)
+   1. [Definitions](#definitions)
+   2. [Comparative Feature Matrix](#comparative-feature-matrix)
+2. [Object-Storage Fundamentals](#object-storage-fundamentals)
+   1. [Buckets & Objects](#buckets--objects)
+   2. [Durability & Availability Guarantees](#durability--availability-guarantees)
+   3. [Consistency Models](#consistency-models)
+   4. [Metadata & Versioning](#metadata--versioning)
+3. [Real-World Use Cases](#real-world-use-cases)
+   1. [How It's Used In Practice](#how-its-used-in-practice)
+   2. [CDN Origin & Static-Site Hosting](#cdn-origin--static-site-hosting)
+   3. [Backup & Archival](#backup--archival)
+   4. [Analytics / ML Pipelines](#analytics--ml-pipelines)
+4. [Market Landscape](#market-landscape)
+   1. [Hyperscale Providers](#hyperscale-providers)
+   2. [Independent / Regional Clouds](#independent--regional-clouds)
+   3. [Open-Source & Self-Hosted Solutions](#open-source--self-hosted-solutions)
+5. [Evaluation Framework](#evaluation-framework)
+   1. [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
+      1. [Latency & Throughput](#latency--throughput)
+      2. [Consistency & Reliability](#consistency--reliability)
+      3. [API Compatibility](#api-compatibility)
+      4. [Data-Egress Cost](#data-egress-cost)
+      5. [Security & Compliance](#security--compliance)
+   2. [Qualitative Criteria](#qualitative-criteria)
+   3. [Weighting & Scoring Method](#weighting--scoring-method)
+6. [Deep Dive: Amazon S3](#deep-dive-amazon-s3)
+   1. [Architecture Overview](#architecture-overview)
+   2. [Feature Highlights](#feature-highlights)
+   3. [Reference Use Cases](#reference-use-cases)
+7. [Deep Dive: Cloudflare R2](#deep-dive-cloudflare-r2)
+   1. [Architecture Overview](#architecture-overview-1)
+   2. [Feature Highlights](#feature-highlights-1)
+   3. [Reference Use Cases](#reference-use-cases-1)
+8. [Architecture & Feature Comparison (S3 vs R2)](#architecture--feature-comparison-s3-vs-r2)
+   1. [Side-by-Side Table](#side-by-side-table)
+   2. [Narrative Analysis](#narrative-analysis)
+9. [Benchmark & Validation Plan](#benchmark--validation-plan)
+   1. [Test Matrix](#test-matrix)
+   2. [Tooling & Environment](#tooling--environment)
+   3. [Metrics Captured](#metrics-captured)
+   4. [Reporting Format](#reporting-format)
+10. [Migration Considerations](#migration-considerations)
+    1. [Lift-and-Shift Approach](#lift-and-shift-approach)
+    2. [Dual-Write / Cut-Over Strategy](#dual-write--cut-over-strategy)
+    3. [API & Semantics Gaps](#api--semantics-gaps)
+11. [Next Steps & Ownership](#next-steps--ownership)
+    1. [Deliverables & Timeline](#deliverables--timeline)
+    2. [Hand-offs & Responsibilities](#hand-offs--responsibilities)
+    3. [Pointer to Cost-Model Page](#pointer-to-cost-model-page)
 
-## Block vs File vs Object storage
+## Block vs File vs Object Storage
 
-Sources: [AWS Blog](https://aws.amazon.com/compare/the-difference-between-block-file-object-storage/)
+### Definitions
+
+| Sources: [AWS Blog](https://aws.amazon.com/compare/the-difference-between-block-file-object-storage/)
 
 🧱 **Block Storage** - Raw storage volumes split into fixed-size blocks. Requires a file system to manage data. Fast and low-latency, ideal for databases and VMs. Minimal built-in metadata.
 
@@ -44,6 +85,7 @@ Sources: [AWS Blog](https://aws.amazon.com/compare/the-difference-between-block-
 
 **Best for**: Scalable storage for unstructured data
 
+### Comparative Feature Matrix
 
 | Feature              | Object Storage                                                                 | Block Storage                                                                              | Cloud File Storage                                                                     |
 |----------------------|----------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------|
@@ -53,9 +95,12 @@ Sources: [AWS Blog](https://aws.amazon.com/compare/the-difference-between-block-
 | **Physical Storage**  | Distributed across multiple storage nodes.                                      | Distributed across SSDs and HDDs.                                                          | On-premises NAS servers or backed by block storage.                                     |
 | **Scalability**       | Unlimited scale.                                                                 | Somewhat limited.                                                                          | Somewhat limited.                                                                       |
 
-## Object Storages
+## Object-Storage Fundamentals
 
-Sources: [AWS Blog](https://aws.amazon.com/what-is/object-storage/), [CloudFlare Blog](https://www.cloudflare.com/en-gb/learning/cloud/what-is-object-storage/)
+### Buckets & Objects
+
+| Sources: [AWS Blog](https://aws.amazon.com/what-is/object-storage/), [CloudFlare Blog](https://www.cloudflare.com/en-
+gb/learning/cloud/what-is-object-storage/)
 
 Object storage is ideal for massive, scalable, reliable storage of data that's accessed in batches or over APIs.
 
@@ -71,11 +116,27 @@ Each object is stored in a bucket.
 
 1. Object storage is accessed via standard HTTP-based APIs.
 2. Metadata plays crutial role for filtering, organizing, and classification of objects.
-3. Object storage systems are built to be highly durable and scalable. Objects are stored across multiple servers or data centers using replication or erasure coding => fault tolerance, scalability, built-in versioning.
-4. Designed for cost-Efficiency and massive scale. Object storage is typically low-cost and optimized for large volumes of unstructured data.
+3. Object storage systems are built to be highly durable and scalable. Objects are stored across multiple servers or data 
+centers using replication or erasure coding => fault tolerance, scalability, built-in versioning.
+4. Designed for cost-Efficiency and massive scale. Object storage is typically low-cost and optimized for large volumes of 
+unstructured data.
 5. Access is done through an API.
 
-## How It's Used in Practice
+### Durability & Availability Guarantees
+
+TODO: Research and document durability and availability guarantees for major providers
+
+### Consistency Models
+
+TODO: Research and document consistency models (eventual vs strong) for major providers
+
+### Metadata & Versioning
+
+TODO: Research and document metadata capabilities and versioning features across providers
+
+## Real-World Use Cases
+
+### How It's Used In Practice
 
 1. _Data Lake Storage_
 
@@ -105,32 +166,71 @@ Each object is stored in a bucket.
 
    Cloud object storage is excellent for long-term data retention. It is cheap, has long retention and immutable by default.
 
-## Solutions in the market
+### CDN Origin & Static-Site Hosting
+
+TODO: Research and document CDN integration patterns and static site hosting capabilities
+
+### Backup & Archival
+
+TODO: Research and document backup and archival features, including lifecycle policies and storage tiers
+
+### Analytics / ML Pipelines
+
+TODO: Research and document analytics and ML pipeline integration patterns
+
+## Market Landscape
+
+### Hyperscale Providers
 
 | Provider         | Service Name              | Notes                                                                 |
 |------------------|---------------------------|-----------------------------------------------------------------------|
 | Amazon           | S3 (Simple Storage Service) | **Industry standard**, highly durable and scalable                 |
 | Google Cloud     | Cloud Storage             | S3-like service, tightly integrated with Google's data & AI tools    |
 | Microsoft Azure  | Blob Storage              | Supports hot/cool/archive tiers, integrates with Azure Data Lake     |
-| IBM              | Cloud Object Storage      | Hybrid/cloud solution based on Cleversafe technology                 |
-| Cloudflare       | R2                        | S3-compatible, **no egress fees**, great for CDN-origin use cases    |
-| Backblaze        | B2 Cloud Storage          | Cost-effective, S3-compatible, used for backups and archives         |
-| Wasabi           | Hot Cloud Storage         | Flat pricing, no egress or API fees, S3-compatible                   |
-| Hetzner          | Object Storage            | EU-based, affordable, S3-compatible                                  |
-| DigitalOcean     | Spaces                    | Simple S3-compatible storage for web apps and static sites           |
-| Scaleway         | Object Storage            | French provider, S3-compatible, supports lifecycle rules             |
-| MinIO            | MinIO (self-hosted)       | Lightweight open-source S3-compatible, ideal for private deployments |
-| Ceph             | Ceph Object Gateway (RGW) | Scalable open-source storage, supports object, file, and block       |
-| OpenIO           | OpenIO Object Storage     | Acquired by OVH, flexible and open source                            |
-| SeaweedFS        | SeaweedFS                 | Efficient file + object hybrid storage, lightweight and fast         |
 
-    NOTE: Wasabi also has no egress fees: https://wasabi.com/cloud-object-storage. The data is stored in Wasabi's own servers inside top-tier colocation facilities.
+![image](https://github.com/user-attachments/assets/c3d2259e-850f-4d56-b92e-44fa7a8c7826)
 
----
+### Independent / Regional Clouds
 
-## Amazon S3
+TODO: Research and document independent and regional cloud providers
 
-### Why is S3 an industry-standard solution?
+### Open-Source & Self-Hosted Solutions
+
+TODO: Research and document open-source and self-hosted solutions
+
+## Evaluation Framework
+
+### Key Performance Indicators (KPIs)
+
+#### Latency & Throughput
+
+TODO: Define latency and throughput KPIs and measurement methodology
+
+#### Consistency & Reliability
+
+TODO: Define consistency and reliability KPIs and measurement methodology
+
+#### API Compatibility
+
+TODO: Define API compatibility KPIs and measurement methodology
+
+#### Data-Egress Cost
+
+TODO: Document data egress cost comparison methodology
+
+#### Security & Compliance
+
+TODO: Define security and compliance KPIs and measurement methodology
+
+### Qualitative Criteria
+
+TODO: Define qualitative evaluation criteria
+
+### Weighting & Scoring Method
+
+TODO: Define weighting and scoring methodology
+
+## Deep Dive: Amazon S3
 
 - 🥇 _First mover_: Launched in 2006, pioneered cloud object storage.
 - 🌐 _S3 API became universal_: Most tools and services support it natively.
@@ -138,9 +238,9 @@ Each object is stored in a bucket.
 - 🌍 _Global scale_: Backed by Amazon's massive infrastructure.
 - 🫂 _Enterprise trust_: Proven durability, security, and compliance over decades.
 
-### S3 Architecture
+### Architecture Overview
 
-    ![image](https://github.com/user-attachments/assets/c3d2259e-850f-4d56-b92e-44fa7a8c7826)
+ ![image](https://github.com/user-attachments/assets/c3d2259e-850f-4d56-b92e-44fa7a8c7826)
 
 - 🛢️ Storage Model
   - Data is stored as objects inside buckets.
@@ -157,6 +257,9 @@ Each object is stored in a bucket.
 - 🗺️ Namespace and Structure
   - S3 uses a **flat namespace** — "folders" are simulated using object key prefixes (e.g., `photos/2025/04/image.jpg`).
   - There is no real hierarchy like in a traditional file system.
+
+
+### Feature Highlights
 
 - 🌐 Access Layer (API)
   - Users and services access objects via the **S3 REST API** or **AWS SDKs**.
@@ -193,9 +296,7 @@ Each object is stored in a bucket.
   - **Transfer Acceleration** for faster uploads via CloudFront edge locations.
   - **Intelligent-Tiering** to automatically move data to cheaper storage classes based on access patterns.
 
-### Companies That Use S3
-
-A lot of companies leverage S3 under the hood of their architectures. 
+### Reference Use Cases
 
 1. ❄️ _Snowflake_
   
@@ -232,12 +333,10 @@ A lot of companies leverage S3 under the hood of their architectures.
    Source: [Amazon Website](https://aws.amazon.com/solutions/case-studies/innovators/salesforce/#:~:text=Salesforce%20launched%20Hyperforce%20on%20AWS,residency%20and%20data%20sovereignty%20regulations.)
   
    Salesforce utilizes Amazon S3 to store backups, logs, and static assets across various services.
- 
+   
 ---
 
-## Cloudflare R2
-
-Cloudflare R2 presents a compelling alternative to traditional object storage solutions, particularly for applications with high data transfer requirements. Its integration with Cloudflare's global network and serverless compute platform offers developers a powerful and cost-effective storage solution.
+## Deep Dive: Cloudflare R2
 
 Sources: [Cloudflare R2 documentation](https://developers.cloudflare.com/r2/), [Cloudflare R2 website](https://www.cloudflare.com/en-gb/developer-platform/products/r2/?utm_source=chatgpt.com)
 
@@ -251,7 +350,7 @@ Source: [Medium](https://y-consulting.medium.com/cloudflare-r2-vs-the-big-3-a-de
 - 🧩 **Integrated Ecosystem**: R2 integrates natively with Cloudflare Workers, enabling serverless compute operations directly on stored data.  ￼
 - 📊 **Predictable Pricing**: With transparent and straightforward pricing, R2 offers a cost-effective solution without hidden fees.  ￼
 
-### R2 Architecture
+### Architecture Overview
 
 - 🛢️ **Storage Model**:
   - Data is stored as **objects** inside **buckets**.
@@ -267,6 +366,8 @@ Source: [Medium](https://y-consulting.medium.com/cloudflare-r2-vs-the-big-3-a-de
   - Uses a **flat namespace** like S3 (no true folders, only key prefixes).
   - Public and private buckets supported.
   - Easy integration with access control and versioning features.
+
+### Feature Highlights
 
 - 🌐 **Access Layer (API)**:
   - Provides a **fully S3-compatible API**.
@@ -288,10 +389,7 @@ Source: [Medium](https://y-consulting.medium.com/cloudflare-r2-vs-the-big-3-a-de
   - **No egress fees** makes direct delivery to users cheap and scalable.
   - Event-driven architecture supported (object creation triggers via Workers).
 
-
-### Companies That Use R2
-
-Several organizations leverage Cloudflare R2 for its performance and cost benefits:
+### Reference Use Cases
 
 1. 📈 **LunarCrush**
 
@@ -313,7 +411,9 @@ Several organizations leverage Cloudflare R2 for its performance and cost benefi
 
      Leverages R2 to simplify security for remote work, protect against cyberattacks, and handle global traffic surges efficiently across its public apps and internal systems.
 
-## S3 vs R2 — Architecture Comparison
+## Architecture & Feature Comparison (S3 vs R2)
+
+### Side-by-Side Table
 
 | Aspect                | Amazon S3                                         | Cloudflare R2                                     |
 |------------------------|--------------------------------------------------|--------------------------------------------------|
@@ -328,3 +428,53 @@ Several organizations leverage Cloudflare R2 for its performance and cost benefi
 | 🏎️ Performance Features | Multi-part uploads, byte-range retrievals, Transfer Acceleration. | Edge caching via CDN, event-driven triggers via Workers. |
 | 💵 Egress Cost          | Egress to Internet is expensive ($0.09/GB for first 10TB). | No egress cost to Internet — **free egress**. |
 | 💬 Other Notes          | Massive ecosystem, enterprise support, strong consistency model.| Great for cost-saving at scale, especially for public-facing workloads. |
+
+### Narrative Analysis
+
+TODO: Add narrative analysis comparing S3 and R2
+
+## Benchmark & Validation Plan
+
+### Test Matrix
+
+TODO: Define test matrix including object sizes and regions
+
+### Tooling & Environment
+
+TODO: Define tooling and environment setup
+
+### Metrics Captured
+
+TODO: Define metrics to be captured during testing
+
+### Reporting Format
+
+TODO: Define reporting format and structure
+
+## Migration Considerations
+
+### Lift-and-Shift Approach
+
+TODO: Document lift-and-shift migration approach
+
+### Dual-Write / Cut-Over Strategy
+
+TODO: Document dual-write and cut-over strategies
+
+### API & Semantics Gaps
+
+TODO: Document API and semantics gaps between providers
+
+## Next Steps & Ownership
+
+### Deliverables & Timeline
+
+TODO: Define deliverables and timeline
+
+### Hand-offs & Responsibilities
+
+TODO: Define hand-offs and responsibilities
+
+### Pointer to Cost-Model Page
+
+TODO: Add pointer to cost-model page
