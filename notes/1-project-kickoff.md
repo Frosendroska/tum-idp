@@ -187,16 +187,39 @@ TODO: Research and document analytics and ML pipeline integration patterns
 | Amazon           | S3 (Simple Storage Service) | **Industry standard**, highly durable and scalable                 |
 | Google Cloud     | Cloud Storage             | S3-like service, tightly integrated with Google's data & AI tools    |
 | Microsoft Azure  | Blob Storage              | Supports hot/cool/archive tiers, integrates with Azure Data Lake     |
-
-![image](https://github.com/user-attachments/assets/c3d2259e-850f-4d56-b92e-44fa7a8c7826)
+| IBM              | Cloud Object Storage      | Hybrid/cloud solution based on Cleversafe technology                 |
+| Cloudflare       | R2                        | S3-compatible, **no egress fees**, great for CDN-origin use cases    |
+| Backblaze        | B2 Cloud Storage          | Cost-effective, S3-compatible, used for backups and archives         |
+| Wasabi           | Hot Cloud Storage         | Flat pricing, no egress or API fees, S3-compatible                   |
+| Hetzner          | Object Storage            | EU-based, affordable, S3-compatible                                  |
+| DigitalOcean     | Spaces                    | Simple S3-compatible storage for web apps and static sites           |
+| Scaleway         | Object Storage            | French provider, S3-compatible, supports lifecycle rules             |
+| MinIO            | MinIO (self-hosted)       | Lightweight open-source S3-compatible, ideal for private deployments |
+| Ceph             | Ceph Object Gateway (RGW) | Scalable open-source storage, supports object, file, and block       |
+| OpenIO           | OpenIO Object Storage     | Acquired by OVH, flexible and open source                            |
+| SeaweedFS        | SeaweedFS                 | Efficient file + object hybrid storage, lightweight and fast         |
 
 ### Independent / Regional Clouds
 
-TODO: Research and document independent and regional cloud providers
+| Provider         | Service Name              | Notes                                                                |
+|------------------|---------------------------|----------------------------------------------------------------------|
+| IBM              | Cloud Object Storage      | Hybrid/cloud solution based on Cleversafe technology                 |
+| Cloudflare       | R2                        | S3-compatible, **no egress fees**, great for CDN-origin use cases    |
+| Backblaze        | B2 Cloud Storage          | Cost-effective, S3-compatible, used for backups and archives         |
+| Wasabi           | Hot Cloud Storage         | Flat pricing, no egress or API fees, S3-compatible                   |
+| Hetzner          | Object Storage            | EU-based, affordable, S3-compatible                                  |
+| DigitalOcean     | Spaces                    | Simple S3-compatible storage for web apps and static sites           |
+| Scaleway         | Object Storage            | French provider, S3-compatible, supports lifecycle rules             |
+
 
 ### Open-Source & Self-Hosted Solutions
 
-TODO: Research and document open-source and self-hosted solutions
+| Provider         | Service Name              | Notes                                                                |
+|------------------|---------------------------|----------------------------------------------------------------------|
+| MinIO            | MinIO (self-hosted)       | Lightweight open-source S3-compatible, ideal for private deployments |
+| Ceph             | Ceph Object Gateway (RGW) | Scalable open-source storage, supports object, file, and block       |
+| OpenIO           | OpenIO Object Storage     | Acquired by OVH, flexible and open source                            |
+| SeaweedFS        | SeaweedFS                 | Efficient file + object hybrid storage, lightweight and fast         |
 
 ## Evaluation Framework
 
