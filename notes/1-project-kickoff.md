@@ -10,62 +10,66 @@ The goal is to establish a solid foundation for subsequent analysis by identifyi
 Here we skip the financial analysisю
 
 ## Table of Contents
-1. [Block vs File vs Object Storage](#block-vs-file-vs-object-storage)
-   1. [Definitions](#definitions)
-   2. [Comparative Feature Matrix](#comparative-feature-matrix)
-2. [Object-Storage Fundamentals](#object-storage-fundamentals)
-   1. [Buckets & Objects](#buckets--objects)
-   2. [Durability & Availability Guarantees](#durability--availability-guarantees)
-   3. [Consistency Models](#consistency-models)
-   4. [Metadata & Versioning](#metadata--versioning)
-3. [Real-World Use Cases](#real-world-use-cases)
-   1. [How It's Used In Practice](#how-its-used-in-practice)
-   2. [CDN Origin & Static-Site Hosting](#cdn-origin--static-site-hosting)
-   3. [Backup & Archival](#backup--archival)
-   4. [Analytics / ML Pipelines](#analytics--ml-pipelines)
-4. [Market Landscape](#market-landscape)
-   1. [Hyperscale Providers](#hyperscale-providers)
-   2. [Independent / Regional Clouds](#independent--regional-clouds)
-   3. [Open-Source & Self-Hosted Solutions](#open-source--self-hosted-solutions)
-5. [Evaluation Framework](#evaluation-framework)
-   1. [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
-      1. [Latency & Throughput](#latency--throughput)
-      2. [Consistency & Reliability](#consistency--reliability)
-      3. [API Compatibility](#api-compatibility)
-      4. [Data-Egress Cost](#data-egress-cost)
-      5. [Security & Compliance](#security--compliance)
-   2. [Qualitative Criteria](#qualitative-criteria)
-   3. [Weighting & Scoring Method](#weighting--scoring-method)
-6. [Deep Dive: Amazon S3](#deep-dive-amazon-s3)
-   1. [Architecture Overview](#architecture-overview)
-   2. [Feature Highlights](#feature-highlights)
-   3. [Reference Use Cases](#reference-use-cases)
-7. [Deep Dive: Cloudflare R2](#deep-dive-cloudflare-r2)
-   1. [Architecture Overview](#architecture-overview-1)
-   2. [Feature Highlights](#feature-highlights-1)
-   3. [Reference Use Cases](#reference-use-cases-1)
-8. [Architecture & Feature Comparison (S3 vs R2)](#architecture--feature-comparison-s3-vs-r2)
-   1. [Side-by-Side Table](#side-by-side-table)
-   2. [Narrative Analysis](#narrative-analysis)
-9. [Benchmark & Validation Plan](#benchmark--validation-plan)
-   1. [Test Matrix](#test-matrix)
-   2. [Tooling & Environment](#tooling--environment)
-   3. [Metrics Captured](#metrics-captured)
-   4. [Reporting Format](#reporting-format)
-10. [Migration Considerations](#migration-considerations)
-    1. [Lift-and-Shift Approach](#lift-and-shift-approach)
-    2. [Dual-Write / Cut-Over Strategy](#dual-write--cut-over-strategy)
-    3. [API & Semantics Gaps](#api--semantics-gaps)
-11. [Next Steps & Ownership](#next-steps--ownership)
-    1. [Deliverables & Timeline](#deliverables--timeline)
-    2. [Hand-offs & Responsibilities](#hand-offs--responsibilities)
-    3. [Pointer to Cost-Model Page](#pointer-to-cost-model-page)
+- [Project Kickoff \& Literature Review](#project-kickoff--literature-review)
+  - [Overview](#overview)
+  - [Table of Contents](#table-of-contents)
+  - [Block vs File vs Object Storage](#block-vs-file-vs-object-storage)
+    - [Definitions](#definitions)
+    - [Comparative Feature Matrix](#comparative-feature-matrix)
+  - [Object-Storage Fundamentals](#object-storage-fundamentals)
+    - [Buckets \& Objects](#buckets--objects)
+    - [Metadata \& Versioning](#metadata--versioning)
+    - [Durability \& Availability Guarantees](#durability--availability-guarantees)
+    - [Consistency Models](#consistency-models)
+  - [Real-World Use Cases](#real-world-use-cases)
+    - [How It's Used In Practice](#how-its-used-in-practice)
+    - [CDN Origin \& Static-Site Hosting](#cdn-origin--static-site-hosting)
+    - [Backup \& Archival](#backup--archival)
+    - [Analytics / ML Pipelines](#analytics--ml-pipelines)
+  - [Market Landscape](#market-landscape)
+    - [Hyperscale Providers](#hyperscale-providers)
+    - [Independent / Regional Clouds](#independent--regional-clouds)
+    - [Open-Source \& Self-Hosted Solutions](#open-source--self-hosted-solutions)
+  - [Evaluation Framework](#evaluation-framework)
+    - [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
+      - [Latency \& Throughput](#latency--throughput)
+      - [Consistency \& Reliability](#consistency--reliability)
+      - [API Compatibility](#api-compatibility)
+      - [Data-Egress Cost](#data-egress-cost)
+      - [Security \& Compliance](#security--compliance)
+    - [Qualitative Criteria](#qualitative-criteria)
+    - [Weighting \& Scoring Method](#weighting--scoring-method)
+  - [Deep Dive: Amazon S3](#deep-dive-amazon-s3)
+    - [Architecture Overview](#architecture-overview)
+    - [Feature Highlights](#feature-highlights)
+    - [Reference Use Cases](#reference-use-cases)
+  - [Deep Dive: Cloudflare R2](#deep-dive-cloudflare-r2)
+    - [Why is R2 a Disruptive Alternative to S3?](#why-is-r2-a-disruptive-alternative-to-s3)
+    - [Architecture Overview](#architecture-overview-1)
+    - [Feature Highlights](#feature-highlights-1)
+    - [Reference Use Cases](#reference-use-cases-1)
+  - [Architecture \& Feature Comparison (S3 vs R2)](#architecture--feature-comparison-s3-vs-r2)
+    - [Side-by-Side Table](#side-by-side-table)
+    - [Narrative Analysis](#narrative-analysis)
+  - [Benchmark \& Validation Plan](#benchmark--validation-plan)
+    - [Test Matrix](#test-matrix)
+    - [Tooling \& Environment](#tooling--environment)
+    - [Metrics Captured](#metrics-captured)
+    - [Reporting Format](#reporting-format)
+  - [Migration Considerations](#migration-considerations)
+    - [Lift-and-Shift Approach](#lift-and-shift-approach)
+    - [Dual-Write / Cut-Over Strategy](#dual-write--cut-over-strategy)
+    - [API \& Semantics Gaps](#api--semantics-gaps)
+  - [Next Steps \& Ownership](#next-steps--ownership)
+    - [Deliverables \& Timeline](#deliverables--timeline)
+    - [Hand-offs \& Responsibilities](#hand-offs--responsibilities)
+    - [Pointer to Cost-Model Page](#pointer-to-cost-model-page)
 
 ## Block vs File vs Object Storage
 
 ### Definitions
 
-| Sources: [AWS Blog](https://aws.amazon.com/compare/the-difference-between-block-file-object-storage/)
+> Sources: [AWS Blog](https://aws.amazon.com/compare/the-difference-between-block-file-object-storage/)
 
 🧱 **Block Storage** - Raw storage volumes split into fixed-size blocks. Requires a file system to manage data. Fast and low-latency, ideal for databases and VMs. Minimal built-in metadata.
 
@@ -75,13 +79,13 @@ Here we skip the financial analysisю
 
 🗂️ **File Storage** - Hierarchical file and folder structure with standard protocols (NFS, SMB). Supports permissions and shared access. Best for traditional applications needing file paths.
 
-**Example**: AWS EFS, Azure Files, Google Filestore, on-prem NAS\
+**Example**: AWS EFS, Azure Files, Google Filestore, on-prem NAS
 
 **Best for**: Shared folders, file-based apps
 
 🧺 **Object Storage** - Stores data as objects with rich metadata and unique IDs. Accessed via HTTP APIs. Highly scalable, great for unstructured data like images and backups.
 
-**Example**: AWS S3, Cloudflare R2, Google Cloud Storage, Hetzner Storage Box\
+**Example**: AWS S3, Cloudflare R2, Google Cloud Storage, Hetzner Storage Box
 
 **Best for**: Scalable storage for unstructured data
 
@@ -99,8 +103,7 @@ Here we skip the financial analysisю
 
 ### Buckets & Objects
 
-| Sources: [AWS Blog](https://aws.amazon.com/what-is/object-storage/), [CloudFlare Blog](https://www.cloudflare.com/en-
-gb/learning/cloud/what-is-object-storage/)
+> Sources: [AWS Blog](https://aws.amazon.com/what-is/object-storage/), [CloudFlare Blog](https://www.cloudflare.com/en-gb/learning/cloud/what-is-object-storage/)
 
 Object storage is ideal for massive, scalable, reliable storage of data that's accessed in batches or over APIs.
 
@@ -114,25 +117,60 @@ Each object is stored in a bucket.
 
 🪣 **Bucket** - container that holds objects — similar to a folder but without hierarchy. They help organize objects by project, user, application, or use case. Access permissions, region settings, and versioning policies can be applied at the bucket level.
 
-1. Object storage is accessed via standard HTTP-based APIs.
-2. Metadata plays crutial role for filtering, organizing, and classification of objects.
-3. Object storage systems are built to be highly durable and scalable. Objects are stored across multiple servers or data 
-centers using replication or erasure coding => fault tolerance, scalability, built-in versioning.
-4. Designed for cost-Efficiency and massive scale. Object storage is typically low-cost and optimized for large volumes of 
-unstructured data.
-5. Access is done through an API.
-
-### Durability & Availability Guarantees
-
-TODO: Research and document durability and availability guarantees for major providers
-
-### Consistency Models
-
-TODO: Research and document consistency models (eventual vs strong) for major providers
 
 ### Metadata & Versioning
 
-TODO: Research and document metadata capabilities and versioning features across providers
+Metadata and versioning are separate but complementary features that improve how objects are managed, described, and retained over time in object storage. Together, metadata and versioning contribute to better object traceability and enable policy enforcement.
+
+**Metadata** is additional information stored alongside an object. It can be:
+  - **System metadata**, automatically managed by the storage system (e.g., object size, creation time, MIME type)
+  - **User-defined metadata**, custom key-value pairs added by applications or users (e.g., labels, tags, ownership)
+
+Metadata supports tasks like:
+  - Indexing and searching
+  - Enforcing access policies
+  - Organizing data through tags
+  - Automating workflows based on attributes
+
+**Versioning** allows multiple historical versions of the same object to coexist. When enabled, each update to an object creates a new version instead of overwriting the old one.
+
+Versioning supports tasks like:
+  - Recovery from accidental deletions or overwrites
+  - Time-based audits or snapshots
+  - Long-term preservation of data changes
+
+
+### Durability & Availability Guarantees
+
+Durability and availability are foundational concepts that define the reliability of an object storage system.
+
+- **Durability** measures the likelihood that your data remains intact and uncorrupted over time. It is expressed in terms of "nines" (e.g. 99.999999999%). High durability is achieved by replicating each object across multiple storage nodes, data centers, or even geographic regions. This protects against data loss from disk failures, power outages, or natural disasters. Object storage systems are typically designed so that even if several hardware components fail, no data is lost.
+- **Availability** refers to how often your data can be accessed when needed. It is also expressed as a percentage (e.g. 99.99%) and reflects the system's ability to serve read and write operations without downtime. Techniques such as automatic failover, load balancing, and geographically redundant systems help achieve high availability.
+  
+Most cloud providers publicly commit to minimum durability and availability levels. These are not just marketing numbers — they are contractual promises. If the provider fails to meet these guarantees, customers may be entitled to compensation, such as service credits or refunds. This creates a strong incentive for providers to design robust, fault-tolerant systems.
+
+
+### Consistency Models
+
+Consistency defines the visibility and predictability of data operations in distributed systems.
+
+- **Eventual consistency** means that updates will become visible after some delay (eventually). 
+  - Different readers might see different versions of the data for a short time, depending on their location or caching layers. This model favors performance and availability in globally distributed systems but requires developers to design with possible data staleness in mind.
+
+- **Monotonic reads consistency** ensures that once a client reads a particular version of data, it will never see an older version in subsequent reads. 
+  - However, it doesn't guarantee that the client will see the latest version immediately.
+
+- **Read-after-write consistency** guarantees that after a client performs a write, that same client will always see the updated value in subsequent reads. 
+  - However, other clients may still see stale data for a short period until the update propagates.
+
+- **Causal consistency** ensures that operations that are causally related are seen by all users in the correct order. 
+  - Operations that are not causally linked may appear in different orders across clients. This model is stronger than eventual consistency and supports more intuitive user interactions, while still allowing better scalability than strong consistency.
+
+- **Strong consistency** guarantees that once an update operation (like a write or delete) is acknowledged, any subsequent read will immediately reflect that change.
+  -  This model makes system behavior intuitive and reliable for developers, as there is no "lag" between writes and reads. However, achieving strong consistency requires a high level of coordination between distributed nodes, which can increase operation latency. According to the CAP theorem, systems may need to sacrifice either availability or tolerance to network partitions. Additionally, implementing strong consistency often involves complex consensus protocols like Paxos or Raft.
+
+Choosing the right consistency model is critical depending on the application's needs: strong consistency simplifies development, while eventual consistency allows greater performance and scalability.
+
 
 ## Real-World Use Cases
 
