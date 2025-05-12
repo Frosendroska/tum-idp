@@ -23,22 +23,10 @@ Here we skip the financial analysisю
     - [Consistency Models](#consistency-models)
   - [Real-World Use Cases](#real-world-use-cases)
     - [How It's Used In Practice](#how-its-used-in-practice)
-    - [CDN Origin \& Static-Site Hosting](#cdn-origin--static-site-hosting)
-    - [Backup \& Archival](#backup--archival)
-    - [Analytics / ML Pipelines](#analytics--ml-pipelines)
   - [Market Landscape](#market-landscape)
     - [Hyperscale Providers](#hyperscale-providers)
     - [Independent / Regional Clouds](#independent--regional-clouds)
     - [Open-Source \& Self-Hosted Solutions](#open-source--self-hosted-solutions)
-  - [Evaluation Framework](#evaluation-framework)
-    - [Key Performance Indicators (KPIs)](#key-performance-indicators-kpis)
-      - [Latency \& Throughput](#latency--throughput)
-      - [Consistency \& Reliability](#consistency--reliability)
-      - [API Compatibility](#api-compatibility)
-      - [Data-Egress Cost](#data-egress-cost)
-      - [Security \& Compliance](#security--compliance)
-    - [Qualitative Criteria](#qualitative-criteria)
-    - [Weighting \& Scoring Method](#weighting--scoring-method)
   - [Deep Dive: Amazon S3](#deep-dive-amazon-s3)
     - [Architecture Overview](#architecture-overview)
     - [Feature Highlights](#feature-highlights)
@@ -122,7 +110,7 @@ Each object is stored in a bucket.
 
 Metadata and versioning are separate but complementary features that improve how objects are managed, described, and retained over time in object storage. Together, metadata and versioning contribute to better object traceability and enable policy enforcement.
 
-**Metadata** is additional information stored alongside an object. It can be:
+🏷️ **Metadata** is additional information stored alongside an object. It can be:
   - **System metadata**, automatically managed by the storage system (e.g., object size, creation time, MIME type)
   - **User-defined metadata**, custom key-value pairs added by applications or users (e.g., labels, tags, ownership)
 
@@ -132,7 +120,7 @@ Metadata supports tasks like:
   - Organizing data through tags
   - Automating workflows based on attributes
 
-**Versioning** allows multiple historical versions of the same object to coexist. When enabled, each update to an object creates a new version instead of overwriting the old one.
+🕓 **Versioning** allows multiple historical versions of the same object to coexist. When enabled, each update to an object creates a new version instead of overwriting the old one.
 
 Versioning supports tasks like:
   - Recovery from accidental deletions or overwrites
@@ -144,8 +132,9 @@ Versioning supports tasks like:
 
 Durability and availability are foundational concepts that define the reliability of an object storage system.
 
-- **Durability** measures the likelihood that your data remains intact and uncorrupted over time. It is expressed in terms of "nines" (e.g. 99.999999999%). High durability is achieved by replicating each object across multiple storage nodes, data centers, or even geographic regions. This protects against data loss from disk failures, power outages, or natural disasters. Object storage systems are typically designed so that even if several hardware components fail, no data is lost.
-- **Availability** refers to how often your data can be accessed when needed. It is also expressed as a percentage (e.g. 99.99%) and reflects the system's ability to serve read and write operations without downtime. Techniques such as automatic failover, load balancing, and geographically redundant systems help achieve high availability.
+- 🛡️ **Durability** measures the likelihood that your data remains intact and uncorrupted over time. It is expressed in terms of "nines" (e.g. 99.999999999%). High durability is achieved by replicating each object across multiple storage nodes, data centers, or even geographic regions. This protects against data loss from disk failures, power outages, or natural disasters. Object storage systems are typically designed so that even if several hardware components fail, no data is lost.
+
+- ⚡ **Availability** refers to how often your data can be accessed when needed. It is also expressed as a percentage (e.g. 99.99%) and reflects the system's ability to serve read and write operations without downtime. Techniques such as automatic failover, load balancing, and geographically redundant systems help achieve high availability.
   
 Most cloud providers publicly commit to minimum durability and availability levels. These are not just marketing numbers — they are contractual promises. If the provider fails to meet these guarantees, customers may be entitled to compensation, such as service credits or refunds. This creates a strong incentive for providers to design robust, fault-tolerant systems.
 
@@ -174,47 +163,49 @@ Choosing the right consistency model is critical depending on the application's 
 
 ## Real-World Use Cases
 
+> Sources: [Cloudian](https://cloudian.com/blog/ten-use-cases-where-object-storage-really-stands-out/), [Google Cloud Blog](https://cloud.google.com/learn/what-is-object-storage), [Layer Stack](https://www.layerstack.com/blog/7-use-cases-of-object-storage-a-guide-to-the-power-of-object-based-cloud-computing/)
+
+Object storage plays a foundational role in modern data infrastructure. Its scalability, durability, and flexibility make it suitable for a wide range of real-world applications across industries.
+
+
 ### How It's Used In Practice
 
-1. _Data Lake Storage_
+1. 🗂️ _Data Lake Storage_
 
-   **Datalake** -  stores raw, unstructured or semi-structured data (like JSON, logs, images, Parquet) at large scale. It's flexible and schema-less, making it ideal for machine learning, exploratory analytics, and storing data in its original form.
+   A **data lake** is a centralized repository that allows organizations to store all their structured, semi-structured, and unstructured data at any scale. It supports a schema-on-read approach, meaning data is stored in its raw form and structured later when read. Common formats include JSON, CSV, logs, images, videos, and columnar formats like Parquet.
 
-   A data lake uses cloud object storage as its foundation because it has virtually unlimited scalability and high durability.
+   Cloud object storage is ideal for data lakes due to its virtually unlimited scalability, cost efficiency, and strong durability guarantees. It enables organizations to retain raw data for future analytics, machine learning, compliance, or audit purposes.
 
-2. _ETL/ELT Pipelines_
+2. 🔄 _ETL / ELT Pipelines_
 
-   **ETL (Extract, Transform, Load) and ELT (Extract, Load, Transform)** - data processing workflows used to move data from source systems to move data.
+   **ETL (Extract, Transform, Load)** and **ELT (Extract, Load, Transform)** are common data engineering workflows. In these pipelines, object storage is often used as a staging or intermediate layer between source systems and target data warehouses or databases.
 
-   Object storage is often used as a staging or intermediate layer in ETL/ELT pipelines.
+   Raw data is first ingested into object storage, where it can be transformed using batch or stream processing tools. In ELT patterns, the transformation happens after loading data into analytics engines like Snowflake or BigQuery. Object storage provides a cost-effective and reliable place to store both raw and intermediate data, supporting repeatable and scalable workflows.
 
-3. _Data Sharing & Interchange_
+3. 📤 _Data Sharing & Interchange_
 
-   Companies and individuals use object storage to share data across teams, regions, or even companies.
+   Organizations frequently use object storage to share datasets between internal teams or over organizational boundaries. Because objects are accessed via HTTP(S) and support fine-grained access controls and signed URLs, sharing large files becomes simple, secure, and scalable.
 
-4. _Machine Learning & Analytics_
+   This is especially important for collaborative research, partner integrations, and API-driven platforms where large data assets need to be distributed reliably.
 
-   Machine learning requires object storage because of the scale and cost efficiency. ML teams use object storages for training data, model weights and logs.
+4. 🧠 _Machine Learning & Analytics_
 
-5. _Cloud Apps: Static Assets & CDN Origins_
+   Machine learning workloads benefit greatly from object storage. ML engineers use it to store training datasets, validation sets, model artifacts, checkpoints, and logs. These assets can be large and versioned, and object storage supports both scale and lifecycle management.
 
-    Web apps use object storage for hosting static websites (HTML/CSS/JS), serving user uploads (images, docs, videos), origin storage for CDNs (Cloudflare, AWS CloudFront).
+   In analytics workflows, object storage serves as the foundation for data lakes and enables query engines (e.g. Presto, Athena, Databricks, BigQuery) to operate directly on data without needing to move it into a database first.
 
-6. _Backups, Snapshots, Archival_
+5. 🌐 _Cloud Applications: Static Assets & CDN Origins_
 
-   Cloud object storage is excellent for long-term data retention. It is cheap, has long retention and immutable by default.
+   Object storage is commonly used by modern web applications to serve **static content** such as HTML, CSS, JavaScript, images, documents, and videos. Many frameworks support direct integration with object storage for asset deployment.
 
-### CDN Origin & Static-Site Hosting
+   It is also widely used as an origin source for content delivery networks (CDNs), such as Cloudflare or AWS CloudFront. **CDNs** are globally distributed networks of servers that cache and deliver content from the nearest edge location to the user, significantly improving load times and reducing latency. This setup allows applications to serve content efficiently with low infrastructure overhead. Combined with signed URLs and cache headers, it supports scalable and secure delivery of static assets.
 
-TODO: Research and document CDN integration patterns and static site hosting capabilities
+6. 🗃️ _Backups, Snapshots, and Archival_
 
-### Backup & Archival
+   Cloud object storage is well-suited for backup and archival workloads due to its durability, low cost, and support for immutability. Organizations store daily or weekly backups of databases, virtual machines, or file systems using tools like rsync, rclone, or vendor-managed backup systems.
 
-TODO: Research and document backup and archival features, including lifecycle policies and storage tiers
+   Lifecycle policies and storage tiers (e.g., infrequent access, cold storage, or deep archive) help automatically transition data based on age or access patterns, minimizing cost while ensuring compliance and recoverability.
 
-### Analytics / ML Pipelines
-
-TODO: Research and document analytics and ML pipeline integration patterns
 
 ## Market Landscape
 
@@ -225,17 +216,6 @@ TODO: Research and document analytics and ML pipeline integration patterns
 | Amazon           | S3 (Simple Storage Service) | **Industry standard**, highly durable and scalable                 |
 | Google Cloud     | Cloud Storage             | S3-like service, tightly integrated with Google's data & AI tools    |
 | Microsoft Azure  | Blob Storage              | Supports hot/cool/archive tiers, integrates with Azure Data Lake     |
-| IBM              | Cloud Object Storage      | Hybrid/cloud solution based on Cleversafe technology                 |
-| Cloudflare       | R2                        | S3-compatible, **no egress fees**, great for CDN-origin use cases    |
-| Backblaze        | B2 Cloud Storage          | Cost-effective, S3-compatible, used for backups and archives         |
-| Wasabi           | Hot Cloud Storage         | Flat pricing, no egress or API fees, S3-compatible                   |
-| Hetzner          | Object Storage            | EU-based, affordable, S3-compatible                                  |
-| DigitalOcean     | Spaces                    | Simple S3-compatible storage for web apps and static sites           |
-| Scaleway         | Object Storage            | French provider, S3-compatible, supports lifecycle rules             |
-| MinIO            | MinIO (self-hosted)       | Lightweight open-source S3-compatible, ideal for private deployments |
-| Ceph             | Ceph Object Gateway (RGW) | Scalable open-source storage, supports object, file, and block       |
-| OpenIO           | OpenIO Object Storage     | Acquired by OVH, flexible and open source                            |
-| SeaweedFS        | SeaweedFS                 | Efficient file + object hybrid storage, lightweight and fast         |
 
 ### Independent / Regional Clouds
 
@@ -258,38 +238,6 @@ TODO: Research and document analytics and ML pipeline integration patterns
 | Ceph             | Ceph Object Gateway (RGW) | Scalable open-source storage, supports object, file, and block       |
 | OpenIO           | OpenIO Object Storage     | Acquired by OVH, flexible and open source                            |
 | SeaweedFS        | SeaweedFS                 | Efficient file + object hybrid storage, lightweight and fast         |
-
-## Evaluation Framework
-
-### Key Performance Indicators (KPIs)
-
-#### Latency & Throughput
-
-TODO: Define latency and throughput KPIs and measurement methodology
-
-#### Consistency & Reliability
-
-TODO: Define consistency and reliability KPIs and measurement methodology
-
-#### API Compatibility
-
-TODO: Define API compatibility KPIs and measurement methodology
-
-#### Data-Egress Cost
-
-TODO: Document data egress cost comparison methodology
-
-#### Security & Compliance
-
-TODO: Define security and compliance KPIs and measurement methodology
-
-### Qualitative Criteria
-
-TODO: Define qualitative evaluation criteria
-
-### Weighting & Scoring Method
-
-TODO: Define weighting and scoring methodology
 
 ## Deep Dive: Amazon S3
 
@@ -407,26 +355,37 @@ Source: [Medium](https://y-consulting.medium.com/cloudflare-r2-vs-the-big-3-a-de
 
 - 🚫 **Zero Egress Fees**: Unlike traditional cloud providers, Cloudflare R2 eliminates data transfer (egress) fees, making it highly cost-effective for data-intensive applications.
 - 🔄 **S3-Compatible API**: R2 supports the S3 API, facilitating seamless migration and integration with existing tools and workflows.
-- 🌐 **Global Edge Network**: Leveraging Cloudflare's extensive global network, R2 ensures low-latency data access worldwide.  ￼
-- 🧩 **Integrated Ecosystem**: R2 integrates natively with Cloudflare Workers, enabling serverless compute operations directly on stored data.  ￼
-- 📊 **Predictable Pricing**: With transparent and straightforward pricing, R2 offers a cost-effective solution without hidden fees.  ￼
+- 🌐 **Global Edge Network**: Leveraging Cloudflare's extensive global network, R2 ensures low-latency data access worldwide.
+- 🧩 **Integrated Ecosystem**: R2 integrates natively with Cloudflare Workers, enabling serverless compute operations directly on stored data. 
+- 📊 **Predictable Pricing**: With transparent and straightforward pricing, R2 offers a cost-effective solution without hidden fees.
 
 ### Architecture Overview
 
 - 🛢️ **Storage Model**:
-  - Data is stored as **objects** inside **buckets**.
-  - Each object contains the data, metadata, and a unique key (object name).
-  - Fully S3 API-compatible, making migration from S3 seamless.
+  - Cloudflare R2 stores data as immutable objects in named buckets. Each object is referenced by a globally unique key and can include optional metadata.
+  - Objects are written and read using an S3-compatible API, making it drop-in compatible with tools and services originally built for AWS S3.
+  - Object versioning can be enabled at the bucket level to preserve historical versions of content.
+  - R2 _abstracts away_ the concept of storage regions. When a write is made, Cloudflare’s control plane assigns object placement and routing based on internal logic rather than user-selected regions.
+  - This global abstraction simplifies architecture and improves operational portability.
 
 - 🏗️ **Physical Storage**:
-  - Distributed across **Cloudflare's global network of edge data centers**.
-  - Optimized for low-latency access but centralized for consistency — not full replication at every edge.
-  - Designed to minimize cost by eliminating traditional region-based storage complexity.
+  - R2 does not rely on the global Cloudflare edge network (300+ PoPs) for primary storage. Instead, it uses centralized storage clusters composed of server nodes within one or more co-located data centers (facilities) per logical region.
+  - Within each storage cluster, data is erasure-coded and distributed across a set of storage nodes. Erasure coding provides fault tolerance while minimizing overhead compared to full replication.
+  - Facilities are interconnected with Cloudflare’s backbone network for low-latency internal replication, management, and repair operations.
+  - The control plane monitors node health and rebalances or heals data as needed when infrastructure degrades.
 
 - 🗺️ **Namespace and Structure**:
-  - Uses a **flat namespace** like S3 (no true folders, only key prefixes).
-  - Public and private buckets supported.
-  - Easy integration with access control and versioning features.
+  - R2 implements a flat namespace under each bucket: object keys simulate folder paths but do not form a true directory tree.
+  - Buckets are globally scoped and must be uniquely named across all of Cloudflare R2.
+  - Bucket configurations can include access control (public/private), versioning settings, and lifecycle rules (e.g. auto-deletion after N days).
+  - R2 supports pre-signed URLs for secure time-limited access and integration with authentication systems via Cloudflare Access or Zero Trust.
+
+- 🧠 **Data Lifecycle and Redundancy**:
+  - When an object is uploaded, it is written to a central cluster and erasure-coded into a set of shards.
+  - These shards are written across multiple nodes in physically separate racks and drives within the same cluster to protect against local hardware failures.
+  - Popular or recently accessed objects may be cached at Cloudflare’s edge locations (PoPs) to accelerate delivery to global users.
+  - R2 does not replicate data between multiple clusters/regions by default, but the system is designed to allow data restoration from encoded shards if necessary.
+  - Cloudflare’s centralized architecture is optimized for simplicity, cost-efficiency, and tight integration with its CDN and serverless platforms (e.g., Workers and Pages).
 
 ### Feature Highlights
 
