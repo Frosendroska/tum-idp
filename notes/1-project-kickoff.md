@@ -38,20 +38,6 @@ Here we skip the financial analysisю
     - [Reference Use Cases](#reference-use-cases-1)
   - [Architecture \& Feature Comparison (S3 vs R2)](#architecture--feature-comparison-s3-vs-r2)
     - [Side-by-Side Table](#side-by-side-table)
-    - [Narrative Analysis](#narrative-analysis)
-  - [Benchmark \& Validation Plan](#benchmark--validation-plan)
-    - [Test Matrix](#test-matrix)
-    - [Tooling \& Environment](#tooling--environment)
-    - [Metrics Captured](#metrics-captured)
-    - [Reporting Format](#reporting-format)
-  - [Migration Considerations](#migration-considerations)
-    - [Lift-and-Shift Approach](#lift-and-shift-approach)
-    - [Dual-Write / Cut-Over Strategy](#dual-write--cut-over-strategy)
-    - [API \& Semantics Gaps](#api--semantics-gaps)
-  - [Next Steps \& Ownership](#next-steps--ownership)
-    - [Deliverables \& Timeline](#deliverables--timeline)
-    - [Hand-offs \& Responsibilities](#hand-offs--responsibilities)
-    - [Pointer to Cost-Model Page](#pointer-to-cost-model-page)
 
 ## Block vs File vs Object Storage
 
@@ -211,13 +197,22 @@ Object storage plays a foundational role in modern data infrastructure. Its scal
 
 ### Hyperscale Providers
 
+> [BMC Blogs](https://www.bmc.com/blogs/aws-vs-azure-vs-google-cloud-platforms/#:~:text=Amazon%20Web%20Services%20(AWS)%2C,dominating%20the%20cloud%20market%20worldwide)
+
+**Hyperscale providers** are large-scale cloud infrastructure companies that operate globally distributed data centers with vast compute and storage resources. They offer a comprehensive suite of cloud services, including object storage, compute, networking, and analytics, designed to support massive workloads, high availability, and ultra-low latency at any scale. These providers continually invest in expanding their infrastructure and service capabilities to meet the demands of enterprise and consumer applications worldwide.
+
+The following providers are also called *Big Three*.
+
 | Provider         | Service Name              | Notes                                                                 |
 |------------------|---------------------------|-----------------------------------------------------------------------|
 | Amazon           | S3 (Simple Storage Service) | **Industry standard**, highly durable and scalable                 |
 | Google Cloud     | Cloud Storage             | S3-like service, tightly integrated with Google's data & AI tools    |
 | Microsoft Azure  | Blob Storage              | Supports hot/cool/archive tiers, integrates with Azure Data Lake     |
 
+
 ### Independent / Regional Clouds
+
+**Independent and regional cloud providers** are organizations that operate cloud infrastructure at a smaller scale or within specific geographic regions. They typically focus on competitive pricing, localized compliance with data residency regulations, and tailored customer support. While they offer services similar to hyperscalers—such as S3-compatible object storage—they differentiate through specialized features, lower egress fees, or partnerships with local enterprises.
 
 | Provider         | Service Name              | Notes                                                                |
 |------------------|---------------------------|----------------------------------------------------------------------|
@@ -231,6 +226,8 @@ Object storage plays a foundational role in modern data infrastructure. Its scal
 
 
 ### Open-Source & Self-Hosted Solutions
+
+**Open-source and self-hosted** solutions are community-driven or vendor-supported object storage platforms that organizations can deploy on their own infrastructure or cloud instances. They offer S3-compatible APIs and flexible deployment models—from on-premises clusters to cloud-native environments—providing full control over data, customization, and compliance with data residency requirements. While they require more operational overhead for installation, maintenance, and scaling, these solutions enable cost optimization, avoidance of vendor lock-in, and foster innovation through extensibility and community contributions.
 
 | Provider         | Service Name              | Notes                                                                |
 |------------------|---------------------------|----------------------------------------------------------------------|
@@ -365,7 +362,7 @@ Source: [Medium](https://y-consulting.medium.com/cloudflare-r2-vs-the-big-3-a-de
   - Cloudflare R2 stores data as immutable objects in named buckets. Each object is referenced by a globally unique key and can include optional metadata.
   - Objects are written and read using an S3-compatible API, making it drop-in compatible with tools and services originally built for AWS S3.
   - Object versioning can be enabled at the bucket level to preserve historical versions of content.
-  - R2 _abstracts away_ the concept of storage regions. When a write is made, Cloudflare’s control plane assigns object placement and routing based on internal logic rather than user-selected regions.
+  - R2 _abstracts away_ the concept of storage regions. When a write is made, Cloudflare’s control plane assigns object placement and routing based on **internal** logic rather than user-selected regions.
   - This global abstraction simplifies architecture and improves operational portability.
 
 - 🏗️ **Physical Storage**:
@@ -448,53 +445,3 @@ Source: [Medium](https://y-consulting.medium.com/cloudflare-r2-vs-the-big-3-a-de
 | 🏎️ Performance Features | Multi-part uploads, byte-range retrievals, Transfer Acceleration. | Edge caching via CDN, event-driven triggers via Workers. |
 | 💵 Egress Cost          | Egress to Internet is expensive ($0.09/GB for first 10TB). | No egress cost to Internet — **free egress**. |
 | 💬 Other Notes          | Massive ecosystem, enterprise support, strong consistency model.| Great for cost-saving at scale, especially for public-facing workloads. |
-
-### Narrative Analysis
-
-TODO: Add narrative analysis comparing S3 and R2
-
-## Benchmark & Validation Plan
-
-### Test Matrix
-
-TODO: Define test matrix including object sizes and regions
-
-### Tooling & Environment
-
-TODO: Define tooling and environment setup
-
-### Metrics Captured
-
-TODO: Define metrics to be captured during testing
-
-### Reporting Format
-
-TODO: Define reporting format and structure
-
-## Migration Considerations
-
-### Lift-and-Shift Approach
-
-TODO: Document lift-and-shift migration approach
-
-### Dual-Write / Cut-Over Strategy
-
-TODO: Document dual-write and cut-over strategies
-
-### API & Semantics Gaps
-
-TODO: Document API and semantics gaps between providers
-
-## Next Steps & Ownership
-
-### Deliverables & Timeline
-
-TODO: Define deliverables and timeline
-
-### Hand-offs & Responsibilities
-
-TODO: Define hand-offs and responsibilities
-
-### Pointer to Cost-Model Page
-
-TODO: Add pointer to cost-model page
