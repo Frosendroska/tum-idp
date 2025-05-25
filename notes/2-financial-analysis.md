@@ -209,41 +209,35 @@ Where:
 
 ### Cost Analysis Tool
 
-We've developed a Python script (`scripts/s3_to_r2_migration_calculator.py`) that calculates and visualizes these costs. The script generates several key visualizations:
+`scripts/s3_to_r2_migration_calculator.py` - a Python script that calculates and visualizes these costs. The script generates several key visualizations:
 
 1. **Individual Cost Components**:
-   - S3 Egress Cost vs Data Size (with cost per TB)
-   ![S3 Egress Cost](images/s3_egress_cost.png)
+   - S3 Egress Cost vs Data Size
+   ![S3 Egress Cost](../images/s3_egress_cost.png)
    
-   - S3 GET Operations Cost vs Number of Objects (with cost per object)
-   ![S3 GET Cost](images/s3_get_cost.png)
+   - S3 GET Operations Cost vs Number of Objects
+   ![S3 GET Cost](../images/s3_get_cost.png)
    
-   - R2 PUT Operations Cost vs Number of Objects (with cost per object)
-   ![R2 PUT Cost](images/r2_put_cost.png)
+   - R2 PUT Operations Cost vs Number of Objects
+   ![R2 PUT Cost](../images/r2_put_cost.png)
 
-2. **Cost Breakdown Analysis**:
-   - Pie charts showing the proportion of each cost component for different scenarios
-   ![Cost Breakdown](images/cost_breakdown.png)
-
-3. **Comparative Analysis**:
+2. **Comparative Analysis**:
    - Stacked bar chart comparing total costs across different scenarios
-   ![Cost Comparison](images/cost_comparison.png)
+   ![Cost Comparison](../images/cost_comparison.png)
 
-Each visualization provides different insights:
-- The individual cost plots show how costs scale with data size or number of objects
-- The cost per unit lines help identify economies of scale
-- The pie charts show the relative importance of each cost component
-- The comparative analysis helps understand how costs scale across different scenarios
+   As one can notice form the chart, the price of the requests in negligible small compare to the egress cost of AWS.
 
 ### Example Scenarios
 
 The calculator provides cost estimates for three common scenarios:
 
-| Scenario | Data Size | Objects | Total Cost |
-|----------|-----------|---------|------------|
-| Small    | 5 TB      | 100,000 | $460.00    |
-| Medium   | 50 TB     | 1M      | $4,600.00  |
-| Large    | 200 TB    | 10M     | $18,400.00 |
+| Scenario   | Data Size | Objects      | Total Cost  | Cost per TB |
+|------------|-----------|--------------|-------------|-------------|
+| Small      | 5.0 TB    | 100,000      | $461.29     | $92.26      |
+| Medium     | 50.0 TB   | 1M           | $4,408.10   | $88.16      |
+| Large      | 200.0 TB  | 10M          | $14,180.20  | $70.90      |
+| Hyperscale | 1000.0 TB | 50M          | $55,336.20  | $55.34      |
+| Enterprise | 2000.0 TB | 100M         | $106,781.20 | $53.39      |
 
 ### Using the Calculator
 
