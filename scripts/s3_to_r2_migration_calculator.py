@@ -54,13 +54,13 @@ class S3ToR2MigrationCalculator:
         costs = [self.calculate_s3_egress_cost(size) for size in data_sizes]
         return data_sizes, costs
     
-    def generate_get_cost_data(self, max_objects: int = 1_000_000) -> Tuple[List[int], List[float]]:
+    def generate_get_cost_data(self, max_objects: int = 10_000_000) -> Tuple[List[int], List[float]]:
         """Generate data points for GET operations cost visualization."""
         num_objects = np.linspace(0, max_objects, 100, dtype=int)
         costs = [self.calculate_s3_get_cost(n) for n in num_objects]
         return num_objects, costs
     
-    def generate_put_cost_data(self, max_objects: int = 1_000_000) -> Tuple[List[int], List[float]]:
+    def generate_put_cost_data(self, max_objects: int = 10_000_000) -> Tuple[List[int], List[float]]:
         """Generate data points for PUT operations cost visualization."""
         num_objects = np.linspace(0, max_objects, 100, dtype=int)
         costs = [self.calculate_r2_put_cost(n) for n in num_objects]
