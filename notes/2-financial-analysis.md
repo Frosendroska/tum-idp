@@ -4,47 +4,39 @@
 Analyze cost-saving potential and risk factors when integrating R2 with Amazon, Google, and Microsoft clouds.\
 Evaluate pricing models and potential hidden costs of using Cloudflare R2.
 
+
 ## Overview
 This phase focuses on conducting a comprehensive financial analysis of AWS S3 and Cloudflare R2, with particular attention to total cost of ownership (TCO) and potential cost savings. The analysis will consider various real-world scenarios and integration patterns with major cloud providers.
 
-## Key Areas of Analysis
-1. Total Cost of Ownership (TCO)
-   - Storage costs
-   - Data transfer costs
-   - API operation costs
-   - Management and maintenance costs
-   - Integration costs
 
-2. Real-World Use Cases
-   - Data lake storage
-   - Content delivery
-   - Backup and archival
-   - Application data storage
-   - Media storage and delivery
+## Table of Contents
+- [Financial Analysis](#financial-analysis)
+  - [Overview](#overview)
+  - [Table of Contents](#table-of-contents)
+  - [Amazon S3 Pricing (April 2025)](#amazon-s3-pricing-april-2025)
+    - [Storage Pricing](#storage-pricing)
+    - [Operations Pricing](#operations-pricing)
+    - [Data Transfer Pricing](#data-transfer-pricing)
+  - [Cloudflare R2 Pricing (April 2025)](#cloudflare-r2-pricing-april-2025)
+    - [Storage Pricing](#storage-pricing-1)
+    - [Operations Pricing](#operations-pricing-1)
+  - [S3 vs R2 — Pricing Comparison (April 2025)](#s3-vs-r2--pricing-comparison-april-2025)
+  - [Migration Cost Analysis](#migration-cost-analysis)
+    - [Cost Formulas](#cost-formulas)
+      - [S3 Egress Cost](#s3-egress-cost)
+      - [S3 GET Operations Cost](#s3-get-operations-cost)
+      - [R2 PUT Operations Cost](#r2-put-operations-cost)
+    - [Cost Analysis Tool](#cost-analysis-tool)
+    - [Example Scenarios](#example-scenarios)
+    - [Using the Calculator](#using-the-calculator)
+    - [Key Findings](#key-findings)
+    - [Cost Optimization Recommendations](#cost-optimization-recommendations)
+    - [Limitations](#limitations)
 
-3. Multi-Cloud Integration Analysis
-   - AWS integration costs and benefits
-   - Google Cloud integration costs and benefits
-   - Microsoft Azure integration costs and benefits
-   - Cross-cloud data transfer costs
-
-4. Risk Assessment
-   - Vendor lock-in considerations
-   - Service availability and reliability
-   - Data sovereignty and compliance
-   - Future pricing changes
-   - Integration complexity
-
-5. Hidden Costs Evaluation
-   - Data retrieval costs
-   - API request costs
-   - Cross-region transfer costs
-   - Management overhead
-   - Training and documentation costs
 
 ## Amazon S3 Pricing (April 2025)
 
-Source: [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/)
+> Source: [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/)
 
 ### Storage Pricing
 
@@ -95,20 +87,21 @@ Source: [AWS S3 Pricing page](https://aws.amazon.com/s3/pricing/)
 | Bulk                                  | n/a                                        | n/a                                     | n/a                                        | $0.025                                        | n/a                    | $0.0025                   |
 | **S3 One Zone-Infrequent Access** **   | $0.01                                      | $0.001                                  | $0.01                                      | n/a                                           | n/a                    | n/a                       |
 
+
 ### Data Transfer Pricing
 
 **Egress** - In networking terminology, egress refers to outbound data transfer from a network to another network or an individual server. For cloud providers, this means data that is transferred from one cloud provider's data centers to the public internet, another cloud provider, or to your own infrastructure.
 
 Charges apply in the following scenarios:
  
-- Data transferred **OUT From Amazon S3 To Internet**.
-  First 10 TB / Month	$0.09 per GB
-  Next 40 TB / Month	$0.085 per GB
-  Next 100 TB / Month	$0.07 per GB
-  Greater than 150 TB / Month	$0.05 per GB
+- Data transferred **OUT From Amazon S3 To Internet**:
+  - First 10 TB / Month: $0.09 per GB
+  - Next 40 TB / Month: $0.085 per GB  
+  - Next 100 TB / Month: $0.07 per GB
+  - Greater than 150 TB / Month: $0.05 per GB
   
 - Data transferred **from S3 to AWS services in a different region**: For example, accessing S3 data from an EC2 instance in another region.
-  From $0.01 per GB to $0.08 per GB
+  - From $0.01 per GB to \$0.08 per GB
 
 Data transfers are free in these cases:
 
@@ -116,9 +109,10 @@ Data transfers are free in these cases:
 - Data transferred **in from the internet**.
 - Data transferred **from an Amazon S3 bucket to any AWS service(s) within the same AWS Region as the S3 bucket** (including to a different account in the same AWS Region).
 
+
 ## Cloudflare R2 Pricing (April 2025)
 
-Source: [Cloudflare R2 Pricing page](https://developers.cloudflare.com/r2/pricing/)
+> Source: [Cloudflare R2 Pricing page](https://developers.cloudflare.com/r2/pricing/)
 
 ### Storage Pricing
 
@@ -145,6 +139,10 @@ Source: [Cloudflare R2 Pricing page](https://developers.cloudflare.com/r2/pricin
 | **Class B Operations**       | $0.36 / million requests   | $0.9 / million requests   | Includes GET, LIST (reading data).                     |
 | **Data Retrieval**           | None                       | $0.1 / million requests   | Processing data.                                       |
 
+**Operation Types Legend:**
+- **Class A Operations**: Write operations that modify data (PUT, POST, DELETE)
+- **Class B Operations**: Read operations that retrieve data (GET, LIST)
+
 **2. Free Tier**
 
 | Operation Type            | Requirement             | Notes                                                    |
@@ -158,6 +156,7 @@ Data transfers are **free** in these cases:
 - Data transferred **out to the internet** is **always free** (no egress charges).
 - Data transferred **within Cloudflare's network** (e.g., to Workers, CDN, Pages) is free.
 - No charges for data **ingress** (uploading into R2).
+
 
 ## S3 vs R2 — Pricing Comparison (April 2025)
 
@@ -173,6 +172,120 @@ Data transfers are **free** in these cases:
 | Retrieval Cost (Cold Storage)  | Varies (e.g., $0.01/GB from S3 IA)           | $0.01/GB for retrieval from Infrequent Access |
 | Free Tier                      | 5 GB storage + 20,000 GET + 2,000 PUT requests per month | 10 GB storage + 1M Class A + 10M Class B ops + unlimited egress |
 
-## Timeline
-- April 2025: Complete TCO analysis for all use cases
-- April 2025: Document findings and prepare for performance testing phase 
+## Migration Cost Analysis
+
+Before calculating the feasibility of using R2, let's first calculate the price of migration. To do this, divide the total price of migration into three main components:
+
+1. S3 Egress Costs
+2. S3 GET Operations Costs
+3. R2 PUT Operations Costs
+
+Then lets colsulate them indipendantly and visualise the findings.
+
+### Cost Formulas
+
+#### S3 Egress Cost
+The egress cost is calculated using tiered pricing:
+
+\[
+\text{Cost} = \sum_{i=1}^{n} \min(\text{remaining\_data}, \text{tier\_size}_i) \times \text{rate}_i
+\]
+
+Where:
+- Tier 1 (0-10 TB): $0.09 per GB
+- Tier 2 (10-50 TB): $0.085 per GB
+- Tier 3 (50-150 TB): $0.07 per GB
+- Tier 4 (>150 TB): $0.05 per GB
+
+#### S3 GET Operations Cost
+\[
+\text{Cost} = \frac{\text{number\_of\_objects}}{1000} \times \$0.0004
+\]
+
+#### R2 PUT Operations Cost
+\[
+\text{Cost} = \frac{\text{number\_of\_objects}}{1,000,000} \times \$4.50
+\]
+
+### Cost Analysis Tool
+
+We've developed a Python script (`scripts/s3_to_r2_migration_calculator.py`) that calculates and visualizes these costs. The script generates several key visualizations:
+
+1. **Individual Cost Components**:
+   - S3 Egress Cost vs Data Size (with cost per TB)
+   ![S3 Egress Cost](images/s3_egress_cost.png)
+   
+   - S3 GET Operations Cost vs Number of Objects (with cost per object)
+   ![S3 GET Cost](images/s3_get_cost.png)
+   
+   - R2 PUT Operations Cost vs Number of Objects (with cost per object)
+   ![R2 PUT Cost](images/r2_put_cost.png)
+
+2. **Cost Breakdown Analysis**:
+   - Pie charts showing the proportion of each cost component for different scenarios
+   ![Cost Breakdown](images/cost_breakdown.png)
+
+3. **Comparative Analysis**:
+   - Stacked bar chart comparing total costs across different scenarios
+   ![Cost Comparison](images/cost_comparison.png)
+
+Each visualization provides different insights:
+- The individual cost plots show how costs scale with data size or number of objects
+- The cost per unit lines help identify economies of scale
+- The pie charts show the relative importance of each cost component
+- The comparative analysis helps understand how costs scale across different scenarios
+
+### Example Scenarios
+
+The calculator provides cost estimates for three common scenarios:
+
+| Scenario | Data Size | Objects | Total Cost |
+|----------|-----------|---------|------------|
+| Small    | 5 TB      | 100,000 | $460.00    |
+| Medium   | 50 TB     | 1M      | $4,600.00  |
+| Large    | 200 TB    | 10M     | $18,400.00 |
+
+### Using the Calculator
+
+To use the migration cost calculator:
+
+1. Install dependencies:
+```bash
+pip install -r scripts/requirements.txt
+```
+
+2. Run the calculator:
+```bash
+python scripts/s3_to_r2_migration_calculator.py
+```
+
+The script will:
+- Generate cost visualization graphs in the `images/` directory
+- Print a table with cost calculations for different scenarios
+- Provide detailed breakdowns of costs for each component
+
+### Key Findings
+
+1. **Egress Costs**: The most significant cost component for large data migrations, with costs increasing linearly but at decreasing rates due to tiered pricing.
+
+2. **GET Operations**: Relatively minor cost component, with costs scaling linearly with the number of objects.
+
+3. **PUT Operations**: Moderate cost component that scales linearly with the number of objects, but at a higher rate than GET operations.
+
+### Cost Optimization Recommendations
+
+1. **Batch Operations**: Group objects into larger batches to reduce the number of operations.
+
+2. **Tiered Migration**: Consider migrating data in phases to take advantage of S3's tiered egress pricing.
+
+3. **Object Size Analysis**: Analyze object size distribution to optimize for both storage and operation costs.
+
+4. **Free Tier Utilization**: Take advantage of R2's free tier (10GB storage + 1M Class A + 10M Class B operations) for initial migration testing.
+
+### Limitations
+
+1. The calculator assumes all objects are of similar size and access patterns.
+2. Network transfer times and potential throttling are not considered.
+3. Storage costs during the migration period are not included.
+4. The analysis does not account for potential AWS data transfer discounts for enterprise customers.
+
