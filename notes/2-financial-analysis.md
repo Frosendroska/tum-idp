@@ -27,8 +27,6 @@ This phase focuses on conducting a comprehensive financial analysis of AWS S3 an
       - [S3 GET Operations Cost](#s3-get-operations-cost)
       - [R2 PUT Operations Cost](#r2-put-operations-cost)
     - [Cost Analysis Tool](#cost-analysis-tool)
-    - [Example Scenarios](#example-scenarios)
-    - [Using the Calculator](#using-the-calculator)
     - [Key Findings](#key-findings)
     - [Cost Optimization Recommendations](#cost-optimization-recommendations)
     - [Limitations](#limitations)
@@ -209,7 +207,19 @@ Where:
 
 ### Cost Analysis Tool
 
-`scripts/s3_to_r2_migration_calculator.py` - a Python script that calculates and visualizes these costs. The script generates several key visualizations:
+`scripts/s3_to_r2_migration_calculator.py` - a Python script that calculates and visualizes these costs.
+
+```bash
+# Install dependencies:
+pip install -r scripts/requirements.txt
+
+# Run the calculator:
+python scripts/s3_to_r2_migration_calculator.py
+
+#Check the output and `images/` directory
+```
+
+The script generates several key visualizations:
 
 1. **Individual Cost Components**:
    - S3 Egress Cost vs Data Size
@@ -222,41 +232,19 @@ Where:
    ![R2 PUT Cost](../images/r2_put_cost.png)
 
 2. **Comparative Analysis**:
-   - Stacked bar chart comparing total costs across different scenarios
+   - Stacked bar chart comparing total costs across different scenarios:
+   - 
+   | Scenario   | Data Size | Objects      | Total Cost  | Cost per TB |
+   |------------|-----------|--------------|-------------|-------------|
+   | Small      | 5.0 TB    | 100,000      | $461.29     | $92.26      |
+   | Medium     | 50.0 TB   | 1M           | $4,408.10   | $88.16      |
+   | Large      | 200.0 TB  | 10M          | $14,180.20  | $70.90      |
+   | Hyperscale | 1000.0 TB | 50M          | $55,336.20  | $55.34      |
+   | Enterprise | 2000.0 TB | 100M         | $106,781.20 | $53.39      |
+   
    ![Cost Comparison](../images/cost_comparison.png)
 
    As one can notice form the chart, the price of the requests in negligible small compare to the egress cost of AWS.
-
-### Example Scenarios
-
-The calculator provides cost estimates for three common scenarios:
-
-| Scenario   | Data Size | Objects      | Total Cost  | Cost per TB |
-|------------|-----------|--------------|-------------|-------------|
-| Small      | 5.0 TB    | 100,000      | $461.29     | $92.26      |
-| Medium     | 50.0 TB   | 1M           | $4,408.10   | $88.16      |
-| Large      | 200.0 TB  | 10M          | $14,180.20  | $70.90      |
-| Hyperscale | 1000.0 TB | 50M          | $55,336.20  | $55.34      |
-| Enterprise | 2000.0 TB | 100M         | $106,781.20 | $53.39      |
-
-### Using the Calculator
-
-To use the migration cost calculator:
-
-1. Install dependencies:
-```bash
-pip install -r scripts/requirements.txt
-```
-
-2. Run the calculator:
-```bash
-python scripts/s3_to_r2_migration_calculator.py
-```
-
-The script will:
-- Generate cost visualization graphs in the `images/` directory
-- Print a table with cost calculations for different scenarios
-- Provide detailed breakdowns of costs for each component
 
 ### Key Findings
 
