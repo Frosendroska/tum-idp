@@ -244,15 +244,13 @@ The script generates several key visualizations:
    
    ![Cost Comparison](../images/cost_comparison.png)
 
-   As one can notice form the chart, the price of the requests in negligible small compare to the egress cost of AWS.
-
 ### Key Findings
 
 1. **Egress Costs**: The most significant cost component for large data migrations, with costs increasing linearly but at decreasing rates due to tiered pricing.
 
-2. **GET Operations**: Relatively minor cost component, with costs scaling linearly with the number of objects.
+2. **GET Operations**: Relatively minor cost component, with costs scaling linearly with the number of objects. the requests in negligible small compare to the egress cost of AWS.
 
-3. **PUT Operations**: Moderate cost component that scales linearly with the number of objects, but at a higher rate than GET operations.
+3. **PUT Operations**: Moderate cost component that scales linearly with the number of objects, but at a higher rate than GET operations. the requests in negligible small compare to the egress cost of AWS.
 
 ### Cost Optimization Recommendations
 
