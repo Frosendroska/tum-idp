@@ -1,13 +1,18 @@
 ## Benchmarking
 
-While using the Cloudflare's Object storage can be more cost efficient, it is not the only metric to be concidered before the migration. We want to make sure that the performance of the CloudFlare is also feasible and comparible to the S3 costs.
+Although Cloudflare R2 is often more cost-effective than Amazon S3, cost alone shouldn’t drive our migration decision. We must confirm that R2 delivers performance on par with S3 so that the price gap isn’t the result of higher latency or lower throughput.
 
-We want to benchmark the system to show that the Cloudflare infrastructure also has a cutting edge speed and the differenct between the S3 and R2' price is not because in Amazon we pay for a great performance that we will lack in the Cloudflare invironment. 
+Our benchmark should therefore evaluate the entire end-to-end pipeline—not just R2’s raw object-storage performance, but also Cloudflare Workers and any computation running on external VMs. Specifically, we need to answer:
+	•	Is Cloudflare R2 fast enough relative to S3?
+	•	Does zero-egress pricing outweigh R2’s request fees?
+	•	Should compute run on Cloudflare Workers or remain on traditional VMs?
 
-Since one of the advantages that we have in the R2 is the absence of vendor lock in, we need to check not only the performance of the Object Storage inself, but the end-to-end pipeline with not inly Cloudflare workersl, but also the other VM's for computation. Is Cloudflare R2 fast enough compared with S3? Does free egress offset R2’s request fees? Whether to run compute on Cloudflare Workers or on classic VMs.
+Addressing these questions will show whether we can gain R2’s vendor-neutral benefits without sacrificing speed or incurring hidden costs.
 
 
 ## Existing benchmarking solutions
+
+### Skyrise
 
 In the BTW25 conference TU Berlin presented a "An Empirical Evaluation of Serverless Cloud Infrastructure for
 Large-Scale Data Processing" paper. They performed a detailed analysis of the performance and cost characteristics of serverless infrastructure in the data processing contex. Moreover, they provided an open source framework that enables the integration of the additional benchmarks and cloud infrastructure.
@@ -17,99 +22,63 @@ Large-Scale Data Processing" paper. They performed a detailed analysis of the pe
 
 ### Results 
 
-### **Skyrise** framework 
+| Service                     | Max Aggregate Throughput (Read / Write)            | IOPS (Read / Write) on New Setup | Read Latency (Median | p95) | Notes |
+|----------------------------|-----------------------------------------------------|----------------------------------|----------------------|------|-------|
+| S3 Standard                | ~250 / ~250 GiB/s (linear scaling with clients)     | ~8k / ~4k ops/s                  | ~27 ms | ~75 ms       | Highest tail latency; outliers >10 s. |
+| S3 Express One Zone        | ~250 / ~250 GiB/s (similar scaling to Standard)     | ~220k / ~42k ops/s               | ~5 ms | ~5 ms        | Low and consistent latency; higher request cost. |
+| DynamoDB (on-demand)       | ~0.38 / ~0.03 GiB/s (saturates early)               | ~16k / ~9.6k ops/s               | ~5 ms | (more variable) | Ultra-low median latency; poor bulk throughput/cost. |
+| EFS (per filesystem)       | ~20 / ~5 GiB/s (hits per-FS quotas)                 | Well below per-FS quotas; limited scaling | ~5 ms | ~5 ms | Writes ~2–3× slower than reads; doubling with 2 FS only. |
 
-| Component (folder) | Purpose | R2 impact |
-|--------------------|---------|-----------|
-| **`script/benchmark/microbench/`** | Object‑store micro‑benchmarks (size × concurrency × op‑type) | Works out‑of‑the‑box via S3 SDK. |
-| **`script/query_engine/`** | Serverless SQL engine that runs TPC‑H on S3 + Lambda | Swap SDK endpoint to R2; optional: replace Lambda launcher with Workers. |
-| **`experiment/*.yaml` (Framefort)** | Declarative matrix: `{storage cfg, compute cfg, workload}` | Add a new stanza `provider: r2-production`. |
-| **`cost_model.yaml`** | Unit prices & aggregation logic | Set `egress_price_gb: 0`, update Class‑A/B and storage rates. |
-| **`plotting/`** | Generates CSV + Matplotlib figures | Same scripts; new R2 run drops automatically into charts. |
 
-*Screenshot #1 – insert after this table: directory tree of `script/benchmark/experiment/` showing the YAMLs.*
+#### Reuse
 
----
+ Skyrise codebase a bit heavyweight for our needs, so we borrowed their overall setup and ideas but wrote a simpler microbenchmark from scratch. 
+ It is implemented in the [direct_storage_benchmark.cpp](https://github.com/Frosendroska/skyrise/edit/no-brain-r2-microbenchmark/src/benchmark/bin/micro_benchmark/direct_storage_benchmark.cpp?pr=%2Fhpides%2Fskyrise%2Fpull%2F1) file in the [repo](https://github.com/hpides/skyrise/pull/1).
 
-## 3 What the Berlin group already tested on S3  
+*Purpose:* Microbenchmark for measuring upload and download performance of Cloudflare R2 object storage using the AWS S3 SDK.
+*Key Features:*
+- Multi-threaded operations: Supports configurable thread counts for parallel uploads/downloads
+- Two-phase testing:
+    - Type A: Upload operations (writes)
+    - Type B: Download operations (reads)
+- Comprehensive metrics: Measures latency (min/max/avg), throughput, and wall-clock timing
+- Configurable parameters: Object size, operation counts, number of runs, bucket/prefix settings
+- Main Components:
+    - R2Benchmark class handles AWS S3 client setup and benchmark execution
+    - CLI interface using CLI11 library for parameter configuration
+    - Thread-safe latency collection with mutex protection
+    - Random data generation for test objects
+*Usage:* The tool uploads objects to R2 storage, then downloads them while measuring performance metrics, making it useful for evaluating R2 storage performance characteristics under different workloads and configurations.
 
-| Bucket | Workload matrix | Repeats | Peak data | AWS bill |
-|--------|-----------------|---------|-----------|----------|
-| **Micro‑bench** | 5 object sizes (1 KB → 1 GB) × 6 concurrency levels (1 → 4096) × **PUT/GET** | 3 | ≈ 90 GB in / 90 GB out | USD 18 (S3) |
-| **End‑to‑end** | TPC‑H SF {10, 100, 300} × 22 queries | 3 | ≈ 2.4 TB read | USD 42 (S3 egress) + USD 8 (Lambda) |
+We run this script with the following parameters for the proof of concept:
 
-*(Source: EDBT ’25 paper 239 & Skyrise repo.)*
+```
+Type A (upload) ops:    1000  
+Type B (download) ops:  10000  
+Object size:            1024 bytes (1 KB)  
+Threads:                8  
+Runs:                   1  
+```
 
-*Screenshot #2 – latency/throughput heat‑map from `experiment/results/*png`.*
+The results are in the (benchnark_plot/)[https://github.com/hpides/skyrise/tree/9d58f82f3c5ba39fe9e181fef4a984cdc49da731/benchmark_plots] folder:
 
----
+#### Benchmark Summary Report
 
-## 4 How to extend Skyrise for R2  
+![](../images/skyrise/latency_boxplot.png)
+![](../images/skyrise/read_latency_distribution.png)
+![](../images/skyrise/write_latency_distribution.png)
+![](../images/skyrise/throughput_comparison.png)
 
-1. **Fork** `hpides/skyrise`.  
-2. **Add storage config**  
+The low throughput is expected—it’s just a basic proof of concept. On top of that, the tests were run from a personal laptop, not from EC2 or R2 workers.
 
-   ```yaml
-   # experiment/storage_r2.yaml
-   name: r2
-   kind: s3-compatible
-   endpoint: https://<account>.r2.cloudflarestorage.com
-   region: auto
-   creds: ${R2_ACCESS_KEY}:${R2_SECRET_KEY}
-   pricing:
-     class_a_per_m: 4.50
-     class_b_per_m: 0.36
-     storage_gb_month: 0.015
-     egress_gb: 0        # Free!
-   ```  
+However, we now have an impression of the latency distribution and can build a more reliable microbenchmark. 
 
-3. **(Optional) new compute provider** – implement `workers_provider.py` that satisfies Skyrise’s `Provider` interface (`deploy`, `invoke`, `collect_logs`). Register it in `providers/__init__.py`.  
-4. **Edit experiment matrix**  
-   - Duplicate `experiment/s3_microbench.yaml` → `r2_microbench.yaml`; change `storage: r2`.  
-   - Duplicate `experiment/tpch_s3.yaml` → `tpch_r2.yaml`; switch both `storage` and (if using Workers) `compute`.  
-5. **Run**  
 
-   ```bash
-   framefort run experiment/r2_microbench.yaml
-   framefort run experiment/tpch_r2.yaml
-   ```  
+### Throughput banchmarks
 
-6. **Collect & compare** – new result CSVs appear under `results/r2/*`. Existing plotting scripts overlay S3 and R2 automatically.
+Our next step is to run more comprehensive experiments from EC2, where we’ll store data in R2 and fetch it from the EC2 instance to test both microbenchmarking and throughput limits. The implementation and the design document are in `R2-bench/` folder.
 
-*Screenshot #3 – sample YAML diff highlighting the three changed lines.*
+#### Results
 
----
 
-## 5 Ensuring comparability with the S3 baseline  
 
-| Aspect | Action for R2 run |
-|--------|------------------|
-| **Object sizes / concurrencies** | Keep **exactly** `sizes=[1k,64k,1M,64M,1G]`, `concurrency=[1,8,64,256,1024,4096]`. |
-| **Repetitions** | Same `n=3` to match CI width. |
-| **Function memory tier** | Choose Cloudflare Workers 128 MB (≈ Lambda 128 MB) or note deviation. |
-| **Request mix** | PUT‑then‑GET; same write/read ratio as S3 run. |
-| **Metrics** | Export the canonical CSV schema (`lat_p50, lat_p95, throughput, cost`). |
-| **Charts** | Re‑run `plot_results.py`; screenshot comparison charts. |
-
----
-
-## 6 Why the Berlin S3 study is directly reusable  
-
-* **Methodology identical** (size‑sweep + concurrency‑sweep → throughput plateau).  
-* **Framework identical** (Skyrise); no code drift.  
-* **Cost model templated** – plug in R2 prices → apples‑to‑apples \$ comparison.  
-* **Publication‑ready baselines** – citing their peer‑reviewed numbers strengthens our report; we only add *“what changes when egress is free.”*
-
-*Screenshot #4 – include the paper’s cost‑break‑even plot; reference Fig. 7 in the PDF.*
-
----
-
-## 7 Next steps & deliverables  
-
-1. **Demo run** with R2 micro‑bench (confirm scripts, collect preliminary CSV).  
-2. **Align with mentor** on whether to include Workers compute or keep compute on local VM.  
-3. **Full experimental sweep** → push `results/r2/*` and updated plots.  
-4. **Write “Findings” subsection**: speed gap, cost delta, break‑even analysis.  
-5. **Update migration‑cost chapter** with the new *real* Class‑A/B counts from the micro‑benchmarks.
-
----
