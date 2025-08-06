@@ -44,20 +44,20 @@ Non-Goals:
 ## Test Design (Single Workload) ￼ 
 
 - *Object:* 9 immutable objects of 1 GiB size.
-  - Fits under 10 GB free tier. Files are > 512 MB, so Cloudflare PoPs never store them; every read is served from R2’s regional store. That guarantees you are exercising R2—not Cloudflare’s CDN—throughout all three phases. At the same time, the huge size eliminates the per request overhead. Using 9 distinct objects mitigates the chance that any single object becomes a bottleneck.
+  - _Fits under 10 GB free tier. Files are > 512 MB, so Cloudflare PoPs never store them; every read is served from R2’s regional store. That guarantees you are exercising R2—not Cloudflare’s CDN—throughout all three phases. At the same time, the huge size eliminates the per request overhead. Using 9 distinct objects mitigates the chance that any single object becomes a bottleneck._
 
 - *Request pattern:* Each worker thread GETs the full object in a tight loop (connection reuse on; no think time) for the entire run.
-  - Large payloads (1 GiB) minimize request count yet still push bandwidth; keep-alive removes TLS handshake overhead and mirrors Amazon S3 best practices for high throughput.
+  - _Large payloads (1 GiB) minimize request count yet still push bandwidth; keep-alive removes TLS handshake overhead and mirrors Amazon S3 best practices for high throughput._
 
 - *Concurrency*: Start at C = 16 connections; ramp upward (+8 every 5 min) until throughput no longer grows or the connection saturates; then hold at the best concurrency for the remainder.
     - *Phases:*
         1.	Warm-up: 5 min at moderate C_{0} = 8 (stabilize connections/paths).
         2.	Ramp: step up C_x - C _{x-1} = 8 every 5 min to find the plateau.
         3.	Steady-state: run at plateau C_{n} for hours to measure the 
-    - Warm-up lets TCP slow-start and TLS session reuse stabilise; ramp finds R2-imposed ceiling; long steady-state captures drift/tail latency. Gradual ramp prevents sudden 429s and mimics AWS “warm-up” guidance.  The threads will round-robin the object keys they fetch. This would avoid creating a single “hot object” bottleneck and instead spread load across multiple keys. There’s no need for complex asynchronous pipelining here because the goal is to maximize throughput per connection for large transfers. We need to verify that the HTTP client library isn’t, for example, defaulting to HTTP/2 and multiplexing all threads over one TCP connection, which could become a bottleneck.
+    - _Warm-up lets TCP slow-start and TLS session reuse stabilise; ramp finds R2-imposed ceiling; long steady-state captures drift/tail latency. Gradual ramp prevents sudden 429s and mimics AWS “warm-up” guidance.  The threads will round-robin the object keys they fetch. This would avoid creating a single “hot object” bottleneck and instead spread load across multiple keys. There’s no need for complex asynchronous pipelining here because the goal is to maximize throughput per connection for large transfers. We need to verify that the HTTP client library isn’t, for example, defaulting to HTTP/2 and multiplexing all threads over one TCP connection, which could become a bottleneck._
 
 - *Object Storage & Workers:* R2 client with endpoint = `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` in EU. One EC2 in Frankfurt with high bandwidth. 
-  - Avoid the multi-region and multi-client overheads. If NIC counters/CPU/IRQ/Socket errors/No 5 Gb/s flat-line per flow max out before P95 latency jumps, the bottleneck is the EC2.
+  - _Avoid the multi-region and multi-client overheads. If NIC counters/CPU/IRQ/Socket errors/No 5 Gb/s flat-line per flow max out before P95 latency jumps, the bottleneck is the EC2._
   
 ￼
 ## Metrics Captured
