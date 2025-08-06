@@ -83,7 +83,7 @@ Non-Goals:
 
 *AWS SDK with CRT:* AWS has optimized S3 clients (e.g., in AWS C++ SDK or experimental CRT for Python) that can automatically use multiple threads and connections for a single transfer ￼. This can saturate 10+ Gbps links by parallelizing data fetching.
 
-*Prometheus:* For live metrics of the system
+*Prometheus:* For live metrics of the system under test and better observability.
 
 
 ## References (key excerpts)
