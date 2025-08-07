@@ -53,7 +53,7 @@ Non-Goals:
     - *Phases:*
         1.	Warm-up: 5 min at moderate C_{0} = 8 (stabilize connections/paths).
         2.	Ramp: step up C_x - C _{x-1} = 8 every 5 min to find the plateau.
-        3.	Steady-state: run at plateau C_{n} for hours to measure the 
+        3.	Steady-state: run at plateau C_{n} for hours to measure the metrics.
     - _Warm-up lets TCP slow-start and TLS session reuse stabilise; ramp finds R2-imposed ceiling; long steady-state captures drift/tail latency. Gradual ramp prevents sudden 429s and mimics AWS “warm-up” guidance.  The threads will round-robin the object keys they fetch. This would avoid creating a single “hot object” bottleneck and instead spread load across multiple keys. There’s no need for complex asynchronous pipelining here because the goal is to maximize throughput per connection for large transfers. We need to verify that the HTTP client library isn’t, for example, defaulting to HTTP/2 and multiplexing all threads over one TCP connection, which could become a bottleneck._
 
 - *Object Storage & Workers:* R2 client with endpoint = `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` in EU. One EC2 in Frankfurt with high bandwidth. 
