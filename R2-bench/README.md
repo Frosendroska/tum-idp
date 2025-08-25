@@ -67,20 +67,27 @@ Non-Goals:
 
 ## Test Plan
 
-- *Phase 1*
+- *Phase 0*
 - Upload the 1 GiB object (aws s3 cp) once.
+
+- *Phase 1*
 - Launch a c8gn.large (100 Gbps‑capable) EC2 in eu‑central‑1.
-- Transfer the 100 MB object ranges in a tight loop at modest rps (10 - 130 - 260 - 390).
-- If we observe TCP-level drops/retransmits that coincide with flat-lined throughput, assume the NIC—not R2—is the bottleneck. In that case, upgrade to the next-larger instance size (200 Gbps, then 300 Gbps) and repeat.
+- Transfer the 100 MB object ranges in a tight loop.
+- Warm‑up 1 min at 10 rps.
+- Ramp C += 50 every 15 sec; stop when observe TCP-level drops/retransmit with flat-lined throughput -- plateu.
+- If we observe TCP-level drops/retransmits that coincide with flat-lined throughput, assume the NIC—not R2—is the bottleneck. 
 - Write Parquet logs.
 - Record maximum sustainable NIC bandwidth; verify R2 isn’t the immediate bottleneck.
+
+Repeat this phase with different EC2 instances (200 Gbps, then 300 Gbps) to find the one where the R2 is a bottleneck and not the EC2.
 
 - *Phase 2*
 When we find the maximum throughput, we can start an actual test that will find a plateau and microbenchmark the system.
 
 - Take the final instance size selected in Phase 1.
-- Warm‑up 5 min at 10 rps.
-- Ramp C += 10 every 1 min; stop when observe TCP-level drops/retransmit with flat-lined throughput.
+- Transfer the 100 MB object ranges in a tight loop.
+- Warm‑up 1 min at 10 rps.
+- Ramp C += 10 every 30 sec; stop when observe flat-lined throughput.
 - Hold steady‑state at C for ≥ 3 h.
 - Continuously scrape Prometheus + write Parquet logs.
 - Post‑process: generate throughput timeline, latency CDF, error histogram.
@@ -100,7 +107,7 @@ check
 
 **Features:**
 
-- Reports peak Mbps and Δ Mbps/step.
+- Reports peak Mbps and Δ Mbps/step for the specified instance.
 - Parquet raw per request.
 
 ### Benchmark
@@ -165,7 +172,7 @@ benchmark
 
 ## Tooling
 
-*AWS SDK with CRT in GO:* Enables multi‑thread & multi‑connection transfers that can exceed 10 Gbps on a single object.
+*AWS SDK with CRT in Python:* 
 
 *Prometheus and Grafana:* Unified metrics endpoint for both binaries and OS‑level exporters. Used to discover the data during runtime.
 
