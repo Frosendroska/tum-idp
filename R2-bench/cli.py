@@ -37,9 +37,6 @@ Examples:
   
   # Phase 2: Long-term benchmark with 64 connections for 3 hours
   python cli.py benchmark --storage r2 --concurrency 64 --hours 3
-  
-  # Run complete experiment
-  python cli.py run --storage r2 --concurrency 64 --hours 3
             """
         )
         
@@ -66,21 +63,12 @@ Examples:
         benchmark_parser.add_argument('--hours', type=int, default=STEADY_STATE_HOURS,
                                     help=f'Duration in hours (default: {STEADY_STATE_HOURS})')
         
-        # Run command (runs all phases)
-        run_parser = subparsers.add_parser('run', help='Run complete experiment (all phases)')
-        run_parser.add_argument('--storage', choices=['r2', 's3'], default='r2',
-                              help='Storage type to use (default: r2)')
-        run_parser.add_argument('--concurrency', type=int, default=64,
-                              help='Number of concurrent connections (default: 64)')
-        run_parser.add_argument('--hours', type=int, default=STEADY_STATE_HOURS,
-                              help=f'Duration in hours (default: {STEADY_STATE_HOURS})')
-        
         return parser
     
     def run_upload(self, args):
         """Run the upload phase."""
         try:
-            from uploader import SimpleUploader
+            from cli.uploader import SimpleUploader
             
             logger.info("=== Phase 0: Upload Test Objects ===")
             
@@ -101,7 +89,7 @@ Examples:
     def run_check(self, args):
         """Run the capacity check phase."""
         try:
-            from check import SimpleCapacityChecker
+            from cli.check import SimpleCapacityChecker
             
             logger.info("=== Phase 1: Capacity Discovery ===")
             
@@ -118,7 +106,7 @@ Examples:
     def run_benchmark(self, args):
         """Run the benchmark phase."""
         try:
-            from benchmark import SimpleBenchmarkRunner
+            from cli.benchmark import SimpleBenchmarkRunner
             
             logger.info("=== Phase 2: Long-term Benchmark ===")
             
@@ -135,44 +123,6 @@ Examples:
             
         except Exception as e:
             logger.error(f"Error in benchmark phase: {e}")
-            return 1
-    
-    def run_complete_experiment(self, args):
-        """Run the complete experiment (all phases)."""
-        try:
-            logger.info("=== R2 Benchmark Complete Experiment ===")
-            logger.info(f"Storage: {args.storage.upper()}")
-            logger.info(f"Concurrency: {args.concurrency}")
-            logger.info(f"Duration: {args.hours} hours")
-            
-            # Phase 0: Upload
-            logger.info("\n--- Starting Phase 0: Upload ---")
-            upload_result = self.run_upload(args)
-            if upload_result != 0:
-                logger.error("Upload phase failed, stopping experiment")
-                return upload_result
-            logger.info("Upload phase completed")
-            
-            # Phase 1: Capacity Check
-            logger.info("\n--- Starting Phase 1: Capacity Discovery ---")
-            check_result = self.run_check(args)
-            if check_result != 0:
-                logger.error("Capacity check failed, stopping experiment")
-                return check_result
-            logger.info("Capacity check completed")
-            
-            # Phase 2: Benchmark
-            logger.info("\n--- Starting Phase 2: Long-term Benchmark ---")
-            benchmark_result = self.run_benchmark(args)
-            if benchmark_result != 0:
-                logger.error("Benchmark phase failed")
-                return benchmark_result
-            
-            logger.info("\n=== Complete Experiment Finished Successfully ===")
-            return 0
-            
-        except Exception as e:
-            logger.error(f"Error in complete experiment: {e}")
             return 1
     
     def run(self, args=None):
@@ -193,8 +143,6 @@ Examples:
                 return self.run_check(parsed_args)
             elif parsed_args.command == 'benchmark':
                 return self.run_benchmark(parsed_args)
-            elif parsed_args.command == 'run':
-                return self.run_complete_experiment(parsed_args)
             else:
                 logger.error(f"Unknown command: {parsed_args.command}")
                 return 1

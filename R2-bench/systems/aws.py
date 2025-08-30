@@ -2,8 +2,8 @@
 AWS S3 object storage system implementation.
 """
 
-from .base import ObjectStorageSystem
-from ..configuration import S3_ENDPOINT, BUCKET_NAME, AWS_REGION
+from systems.base import ObjectStorageSystem
+from configuration import S3_ENDPOINT, BUCKET_NAME, AWS_REGION
 import logging
 
 logger = logging.getLogger(__name__)

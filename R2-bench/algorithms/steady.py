@@ -1,11 +1,11 @@
 """
-Simple steady state algorithm for the R2 benchmark.
+Simple steady-state algorithm for long-term benchmarking.
 """
 
 import time
 import logging
 import threading
-from ..persistence.base import BenchmarkRecord
+from persistence.base import BenchmarkRecord
 
 logger = logging.getLogger(__name__)
 

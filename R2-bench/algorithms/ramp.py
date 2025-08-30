@@ -1,11 +1,11 @@
 """
-Simple ramp algorithm for the R2 benchmark.
+Simple ramp-up algorithm for finding optimal concurrency.
 """
 
 import time
 import logging
 import threading
-from ..persistence.base import BenchmarkRecord
+from persistence.base import BenchmarkRecord
 
 logger = logging.getLogger(__name__)
 

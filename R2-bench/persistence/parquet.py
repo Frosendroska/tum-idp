@@ -1,12 +1,12 @@
 """
-Simple Parquet file persistence for the R2 benchmark.
+Simple Parquet persistence for benchmark results.
 """
 
-import pandas as pd
 import os
+import pandas as pd
 import logging
 from datetime import datetime
-from .base import BenchmarkRecord
+from persistence.base import BenchmarkRecord
 
 logger = logging.getLogger(__name__)
 

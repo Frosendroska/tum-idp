@@ -9,9 +9,12 @@ import argparse
 import time
 
 # Add the current directory to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from configuration import OBJECT_SIZE_GB, BUCKET_NAME, R2_ENDPOINT, S3_ENDPOINT
+from configuration import (
+    OBJECT_SIZE_GB, BUCKET_NAME, R2_ENDPOINT, S3_ENDPOINT,
+    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION
+)
 from systems.r2 import R2System
 from systems.aws import AWSSystem
 
@@ -37,17 +40,17 @@ class SimpleUploader:
         try:
             if self.storage_type == "r2":
                 credentials = {
-                    'aws_access_key_id': os.getenv('AWS_ACCESS_KEY_ID'),
-                    'aws_secret_access_key': os.getenv('AWS_SECRET_ACCESS_KEY'),
+                    'aws_access_key_id': AWS_ACCESS_KEY_ID,
+                    'aws_secret_access_key': AWS_SECRET_ACCESS_KEY,
                     'region_name': 'auto'
                 }
                 self.storage_system = R2System(credentials)
                 
             elif self.storage_type == "s3":
                 credentials = {
-                    'aws_access_key_id': os.getenv('AWS_ACCESS_KEY_ID'),
-                    'aws_secret_access_key': os.getenv('AWS_SECRET_ACCESS_KEY'),
-                    'region_name': os.getenv('AWS_REGION', 'eu-central-1')
+                    'aws_access_key_id': AWS_ACCESS_KEY_ID,
+                    'aws_secret_access_key': AWS_SECRET_ACCESS_KEY,
+                    'region_name': AWS_REGION
                 }
                 self.storage_system = AWSSystem(credentials)
                 
