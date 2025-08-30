@@ -2,8 +2,9 @@
 Simple downloader algorithm for the R2 benchmark.
 """
 
+import time
 import logging
-from ..persistence.base import BenchmarkRecord
+from persistence.base import BenchmarkRecord
 
 logger = logging.getLogger(__name__)
 

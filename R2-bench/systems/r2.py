@@ -2,8 +2,8 @@
 Cloudflare R2 object storage system implementation.
 """
 
-from .base import ObjectStorageSystem
-from ..configuration import R2_ENDPOINT, BUCKET_NAME
+from systems.base import ObjectStorageSystem
+from configuration import R2_ENDPOINT, BUCKET_NAME
 import logging
 
 logger = logging.getLogger(__name__)
