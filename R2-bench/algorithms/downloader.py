@@ -5,6 +5,7 @@ Simple downloader algorithm for the R2 benchmark.
 import time
 import logging
 from persistence.base import BenchmarkRecord
+from configuration import DEFAULT_OBJECT_KEY, CHUNK_SIZE_MB, BYTES_PER_GB, BYTES_PER_MB
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +13,10 @@ logger = logging.getLogger(__name__)
 class SimpleDownloader:
     """Simple algorithm for downloading data from object storage."""
     
-    def __init__(self, storage_system, range_size_mb: int = 100):
+    def __init__(self, storage_system, range_size_mb: int = 100, object_key: str = None):
         self.storage_system = storage_system
         self.range_size_mb = range_size_mb
-        self.object_key = "test-object-1gb"
+        self.object_key = object_key or DEFAULT_OBJECT_KEY
         
         logger.info(f"Initialized downloader with {range_size_mb}MB range size")
     
@@ -55,8 +56,8 @@ class SimpleDownloader:
         """Download the entire test object."""
         try:
             # For large files, we'll download in chunks
-            chunk_size = self.range_size_mb * 1024 * 1024
-            total_size = 1024 * 1024 * 1024  # 1GB
+            chunk_size = self.range_size_mb * BYTES_PER_MB
+            total_size = BYTES_PER_GB  # 1GB
             
             chunks = []
             total_latency = 0

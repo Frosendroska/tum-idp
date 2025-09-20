@@ -6,19 +6,24 @@ import time
 import logging
 import threading
 from persistence.base import BenchmarkRecord
+from configuration import (
+    RANGE_SIZE_MB, DEFAULT_OBJECT_KEY, ERROR_RETRY_DELAY,
+    PROGRESS_REPORT_INTERVAL, PROGRESS_MONITOR_INTERVAL,
+    MEGABITS_PER_MB, BYTES_PER_MB, BYTES_PER_GB, SECONDS_PER_HOUR, default=INITIAL_CONCURRENCY
+)
 
 logger = logging.getLogger(__name__)
 
 
-class SimpleSteadyState:
-    """Simple steady state performance measurement."""
+class SteadyState:
+    """Steady state performance measurement."""
     
-    def __init__(self, storage_system, concurrency: int, duration_hours: int = 3):
+    def __init__(self, storage_system, duration_hours: int = 3, object_key: str = None):
         self.storage_system = storage_system
-        self.concurrency = concurrency
+        self.concurrency = INITIAL_CONCURRENCY
         self.duration_hours = duration_hours
-        self.object_key = "test-object-1gb"
-        self.range_size_mb = 100
+        self.object_key = object_key or DEFAULT_OBJECT_KEY
+        self.range_size_mb = RANGE_SIZE_MB
         
         # Execution state
         self.is_running = False
@@ -26,6 +31,7 @@ class SimpleSteadyState:
         self.end_time = None
         self.stop_event = threading.Event()
         self.worker_threads = []
+        self.lock = threading.Lock()  # Create shared lock for thread safety
         
         # Metrics
         self.total_requests = 0
@@ -46,7 +52,7 @@ class SimpleSteadyState:
         
         self.is_running = True
         self.start_time = time.time()
-        self.end_time = self.start_time + (self.duration_hours * 3600)
+        self.end_time = self.start_time + (self.duration_hours * SECONDS_PER_HOUR)
         self.stop_event.clear()
         
         try:
@@ -91,8 +97,8 @@ class SimpleSteadyState:
         while not self.stop_event.is_set() and time.time() < self.end_time:
             try:
                 # Calculate range for this request
-                range_start = (worker_id * self.range_size_mb * 1024 * 1024) % (1024 * 1024 * 1024)
-                range_length = self.range_size_mb * 1024 * 1024
+                range_start = (worker_id * self.range_size_mb * BYTES_PER_MB) % BYTES_PER_GB
+                range_length = self.range_size_mb * BYTES_PER_MB
                 
                 # Download range
                 data, latency_ms = self.storage_system.download_range(
@@ -100,7 +106,7 @@ class SimpleSteadyState:
                 )
                 
                 # Record metrics
-                with threading.Lock():
+                with self.lock:
                     self.total_requests += 1
                     if data and len(data) > 0:
                         self.successful_requests += 1
@@ -108,14 +114,12 @@ class SimpleSteadyState:
                         self.total_latency += latency_ms
                     else:
                         self.errors += 1
-                
-                time.sleep(0.1)  # Small delay
-                
+                                
             except Exception as e:
                 logger.warning(f"Worker {worker_id} error: {e}")
-                with threading.Lock():
+                with self.lock:
                     self.errors += 1
-                time.sleep(1)
+                time.sleep(ERROR_RETRY_DELAY)
         
         logger.debug(f"Worker {worker_id} finished")
     
@@ -129,12 +133,12 @@ class SimpleSteadyState:
             current_time = time.time()
             
             # Report progress every minute
-            if current_time - last_report_time >= 60:
+            if current_time - last_report_time >= PROGRESS_REPORT_INTERVAL:
                 self._report_progress()
                 last_report_time = current_time
             
             # Sleep for a short interval
-            time.sleep(10)
+            time.sleep(PROGRESS_MONITOR_INTERVAL)
     
     def _report_progress(self):
         """Report current progress."""
@@ -148,11 +152,11 @@ class SimpleSteadyState:
         avg_latency = self.total_latency / self.successful_requests if self.successful_requests > 0 else 0
         
         if elapsed > 0:
-            throughput_mbps = (self.total_bytes * 8) / (elapsed * 1_000_000)
+            throughput_mbps = (self.total_bytes * 8) / (elapsed * MEGABITS_PER_MB)
         else:
             throughput_mbps = 0
         
-        logger.info(f"Progress: {elapsed/3600:.1f}h elapsed, {remaining/3600:.1f}h remaining")
+        logger.info(f"Progress: {elapsed/SECONDS_PER_HOUR:.1f}h elapsed, {remaining/SECONDS_PER_HOUR:.1f}h remaining")
         logger.info(f"Requests: {self.total_requests} total, {self.successful_requests} successful ({success_rate:.2%})")
         logger.info(f"Throughput: {throughput_mbps:.1f} Mbps, Avg Latency: {avg_latency:.1f} ms")
     
@@ -161,7 +165,7 @@ class SimpleSteadyState:
         self.stop_event.set()
         
         for worker in self.worker_threads:
-            worker.join(timeout=5)
+            worker.join()
         
         self.worker_threads.clear()
         self.is_running = False
@@ -176,7 +180,7 @@ class SimpleSteadyState:
         avg_latency = self.total_latency / self.successful_requests if self.successful_requests > 0 else 0
         
         if duration > 0:
-            throughput_mbps = (self.total_bytes * 8) / (duration * 1_000_000)
+            throughput_mbps = (self.total_bytes * 8) / (duration * MEGABITS_PER_MB)
             qps = self.total_requests / duration
         else:
             throughput_mbps = 0
@@ -184,7 +188,7 @@ class SimpleSteadyState:
         
         results = {
             'status': 'completed',
-            'duration_hours': duration / 3600,
+            'duration_hours': duration / SECONDS_PER_HOUR,
             'total_requests': self.total_requests,
             'successful_requests': self.successful_requests,
             'success_rate': success_rate,

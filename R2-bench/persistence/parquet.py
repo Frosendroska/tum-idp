@@ -11,8 +11,8 @@ from persistence.base import BenchmarkRecord
 logger = logging.getLogger(__name__)
 
 
-class SimpleParquetPersistence:
-    """Simple Parquet file persistence."""
+class ParquetPersistence:
+    """Parquet file persistence."""
     
     def __init__(self, output_dir: str = "results"):
         self.output_dir = output_dir
