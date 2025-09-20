@@ -9,7 +9,10 @@ import argparse
 # Add the current directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from configuration import OBJECT_SIZE_GB, STEADY_STATE_HOURS
+from configuration import (
+    OBJECT_SIZE_GB, STEADY_STATE_HOURS, DEFAULT_OBJECT_KEY,
+    DEFAULT_PLOTS_DIR, WORKER_BANDWIDTH_MBPS
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -32,48 +35,64 @@ Examples:
   # Phase 0: Upload test objects to R2
   python cli.py upload --storage r2 --size 1
   
-  # Phase 1: Capacity discovery
-  python cli.py check --storage r2
+  # Phase 1: Capacity discovery (stops at plateau or worker bandwidth limit)
+  python cli.py check --storage r2 --worker-bandwidth 1000
   
   # Phase 2: Long-term benchmark with 64 connections for 3 hours
   python cli.py benchmark --storage r2 --concurrency 64 --hours 3
+  
+  # Generate plots from benchmark results
+  python cli.py visualize --parquet-file results/benchmark_20241201_120000.parquet --output-dir plots
             """
         )
         
         subparsers = parser.add_subparsers(dest='command', help='Available commands')
         
         # Upload command
-        upload_parser = subparsers.add_parser('upload', help='Upload test objects (Phase 0)')
+        upload_parser = subparsers.add_parser('upload', help='Upload test objects')
         upload_parser.add_argument('--storage', choices=['r2', 's3'], default='r2',
                                  help='Storage type to use (default: r2)')
         upload_parser.add_argument('--size', type=int, default=OBJECT_SIZE_GB,
                                  help=f'Object size in GB (default: {OBJECT_SIZE_GB})')
+        upload_parser.add_argument('--object-key', type=str, default=DEFAULT_OBJECT_KEY,
+                                 help=f'Object key for the test object (default: {DEFAULT_OBJECT_KEY})')
         
         # Check command
-        check_parser = subparsers.add_parser('check', help='Capacity discovery (Phase 1)')
+        check_parser = subparsers.add_parser('check', help='Capacity discovery')
         check_parser.add_argument('--storage', choices=['r2', 's3'], default='r2',
                                 help='Storage type to use (default: r2)')
+        check_parser.add_argument('--object-key', type=str, default=DEFAULT_OBJECT_KEY,
+                                help=f'Object key for the test object (default: {DEFAULT_OBJECT_KEY})')
+        check_parser.add_argument('--worker-bandwidth', type=float, default=WORKER_BANDWIDTH_MBPS,
+                                help=f'Maximum bandwidth per worker in Mbps (0 = disabled, default: {WORKER_BANDWIDTH_MBPS})')
         
         # Benchmark command
-        benchmark_parser = subparsers.add_parser('benchmark', help='Long-term benchmark (Phase 2)')
+        benchmark_parser = subparsers.add_parser('benchmark', help='Long-term benchmark')
         benchmark_parser.add_argument('--storage', choices=['r2', 's3'], default='r2',
                                     help='Storage type to use (default: r2)')
-        benchmark_parser.add_argument('--concurrency', type=int, default=64,
-                                    help='Number of concurrent connections (default: 64)')
         benchmark_parser.add_argument('--hours', type=int, default=STEADY_STATE_HOURS,
                                     help=f'Duration in hours (default: {STEADY_STATE_HOURS})')
+        benchmark_parser.add_argument('--object-key', type=str, default=DEFAULT_OBJECT_KEY,
+                                    help=f'Object key for the test object (default: {DEFAULT_OBJECT_KEY})')
+        
+        # Visualize command
+        visualize_parser = subparsers.add_parser('visualize', help='Generate plots from benchmark results')
+        visualize_parser.add_argument('--parquet-file', type=str, required=True,
+                                    help='Path to the Parquet file containing benchmark data')
+        visualize_parser.add_argument('--output-dir', type=str, default=DEFAULT_PLOTS_DIR,
+                                    help=f'Output directory for generated plots (default: {DEFAULT_PLOTS_DIR})')
         
         return parser
     
     def run_upload(self, args):
         """Run the upload phase."""
         try:
-            from cli.uploader import SimpleUploader
+            from cli.uploader import Uploader
             
-            logger.info("=== Phase 0: Upload Test Objects ===")
+            logger.info("=== Upload Test Objects ===")
             
-            uploader = SimpleUploader(args.storage)
-            success = uploader.upload_test_object(args.size)
+            uploader = Uploader(args.storage)
+            success = uploader.upload_test_object(args.size, args.object_key)
             
             if success:
                 logger.info("Upload phase completed successfully")
@@ -89,12 +108,12 @@ Examples:
     def run_check(self, args):
         """Run the capacity check phase."""
         try:
-            from cli.check import SimpleCapacityChecker
+            from cli.check import CapacityChecker
             
-            logger.info("=== Phase 1: Capacity Discovery ===")
+            logger.info("=== Capacity Discovery ===")
             
-            checker = SimpleCapacityChecker(args.storage)
-            results = checker.check_capacity()
+            checker = CapacityChecker(args.storage, args.object_key, args.worker_bandwidth)
+            results = checker.check_capacity(args.object_key)
             
             logger.info("Capacity check completed successfully")
             return 0
@@ -108,11 +127,12 @@ Examples:
         try:
             from cli.benchmark import SimpleBenchmarkRunner
             
-            logger.info("=== Phase 2: Long-term Benchmark ===")
+            logger.info("=== Long-term Benchmark ===")
             
             runner = SimpleBenchmarkRunner(
                 storage_type=args.storage,
-                concurrency=args.concurrency
+                concurrency=args.concurrency,
+                object_key=args.object_key
             )
             
             # Execute benchmark
@@ -123,6 +143,37 @@ Examples:
             
         except Exception as e:
             logger.error(f"Error in benchmark phase: {e}")
+            return 1
+    
+    def run_visualize(self, args):
+        """Run the visualization phase."""
+        try:
+            from cli.visualiser import BenchmarkVisualizer
+            
+            logger.info("=== Visualization Phase ===")
+            
+            # Check if parquet file exists
+            if not os.path.exists(args.parquet_file):
+                logger.error(f"Parquet file not found: {args.parquet_file}")
+                return 1
+            
+            # Initialize visualizer
+            visualizer = BenchmarkVisualizer(args.parquet_file, args.output_dir)
+            
+            # Create all plots
+            plots = visualizer.create_all_plots()
+            
+            if plots:
+                logger.info(f"Successfully created {len(plots)} plots in {args.output_dir}")
+                for plot in plots:
+                    logger.info(f"  - {plot}")
+                return 0
+            else:
+                logger.error("No plots were created")
+                return 1
+            
+        except Exception as e:
+            logger.error(f"Error in visualization phase: {e}")
             return 1
     
     def run(self, args=None):
@@ -143,6 +194,8 @@ Examples:
                 return self.run_check(parsed_args)
             elif parsed_args.command == 'benchmark':
                 return self.run_benchmark(parsed_args)
+            elif parsed_args.command == 'visualize':
+                return self.run_visualize(parsed_args)
             else:
                 logger.error(f"Unknown command: {parsed_args.command}")
                 return 1

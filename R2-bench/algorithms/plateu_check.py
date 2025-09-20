@@ -3,17 +3,19 @@ Simple plateau check algorithm for the R2 benchmark.
 """
 
 import logging
+from configuration import PLATEAU_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
 
-class SimplePlateauCheck:
-    """Simple algorithm to check if throughput has plateaued."""
+class PlateauCheck:
+    """Algorithm to check if throughput has plateaued or worker bandwidth is reached."""
     
-    def __init__(self, threshold: float = 0.05):
-        self.threshold = threshold
+    def __init__(self, threshold: float = None, worker_bandwidth_mbps: float = 0):
+        self.threshold = threshold or PLATEAU_THRESHOLD
+        self.worker_bandwidth_mbps = worker_bandwidth_mbps
         self.measurements = []
-        logger.info(f"Initialized plateau checker with {threshold*100}% threshold")
+        logger.info(f"Initialized plateau checker with {self.threshold*100}% threshold, worker bandwidth limit: {worker_bandwidth_mbps} Mbps")
     
     def add_measurement(self, concurrency: int, throughput_mbps: float, duration_seconds: float):
         """Add a measurement."""
@@ -25,9 +27,25 @@ class SimplePlateauCheck:
         logger.debug(f"Added measurement: {concurrency} conn -> {throughput_mbps:.1f} Mbps")
     
     def is_plateau_reached(self) -> tuple:
-        """Check if plateau is reached."""
-        if len(self.measurements) < 3:
+        """Check if plateau is reached or worker bandwidth limit is hit."""
+        if len(self.measurements) < 1:
             return False, "Not enough measurements"
+        
+        # Check worker bandwidth limit first
+        if self.worker_bandwidth_mbps > 0:
+            latest_measurement = self.measurements[-1]
+            concurrency = latest_measurement['concurrency']
+            total_throughput = latest_measurement['throughput_mbps']
+            
+            # Calculate per-worker throughput
+            per_worker_throughput = total_throughput / concurrency if concurrency > 0 else 0
+            
+            if per_worker_throughput >= self.worker_bandwidth_mbps:
+                return True, f"Worker bandwidth limit reached: {per_worker_throughput:.1f} Mbps per worker >= {self.worker_bandwidth_mbps} Mbps limit"
+        
+        # Check for plateau (need at least 3 measurements)
+        if len(self.measurements) < 3:
+            return False, "Not enough measurements for plateau detection"
         
         # Get last 3 measurements
         recent = self.measurements[-3:]
