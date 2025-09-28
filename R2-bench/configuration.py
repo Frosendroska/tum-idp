@@ -45,6 +45,9 @@ MAX_ERROR_RATE = 0.5  # 50% error rate threshold
 MIN_REQUESTS_FOR_ERROR_CHECK = 10  # Minimum requests before checking error rate
 MAX_CONSECUTIVE_ERRORS = 20  # Stop after this many consecutive errors
 
+# Logging configuration
+LOG_REQUESTS_INTERVAL = 100  # Log progress every N requests
+
 # Test data generation
 CHUNK_SIZE_MB = 100  # Same as RANGE_SIZE_MB for consistency
 TEST_OBJECT_SIZE_GB = 9  # Default test object size
