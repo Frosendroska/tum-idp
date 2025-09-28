@@ -6,7 +6,7 @@ import time
 import logging
 import threading
 from persistence.base import BenchmarkRecord
-from configuration import RANGE_SIZE_MB, DEFAULT_OBJECT_KEY, INITIAL_CONCURRENCY, ERROR_RETRY_DELAY, BYTES_PER_MB, BYTES_PER_GB, MAX_ERROR_RATE, MAX_CONSECUTIVE_ERRORS
+from configuration import RANGE_SIZE_MB, DEFAULT_OBJECT_KEY, INITIAL_CONCURRENCY, ERROR_RETRY_DELAY, BYTES_PER_MB, BYTES_PER_GB, MAX_ERROR_RATE, MAX_CONSECUTIVE_ERRORS, LOG_REQUESTS_INTERVAL
 
 
 logger = logging.getLogger(__name__)
@@ -53,12 +53,6 @@ class WarmUp:
         
         # Wait for all threads to complete with progress reporting
         logger.info(f"Warm-up running for {self.warm_up_minutes} minutes...")
-        
-        # Progress monitoring
-        progress_thread = threading.Thread(target=self._progress_monitor, args=(results, start_time, warm_up_seconds))
-        progress_thread.daemon = True
-        progress_thread.start()
-        
         for thread in threads:
             thread.join()
         
@@ -103,10 +97,6 @@ class WarmUp:
                 )
                 
                 request_count += 1
-                if request_count % 5 == 0:  # Log every 5 requests per worker for better visibility
-                    elapsed = time.time() - start_time
-                    remaining = duration_seconds - elapsed
-                    logger.debug(f"Worker {worker_id}: {request_count} requests in {elapsed:.1f}s (remaining: {remaining:.1f}s)")
                 
                 # Update results (thread-safe)
                 with self.lock:
@@ -119,7 +109,12 @@ class WarmUp:
                     else:
                         results['errors'] += 1
                         consecutive_errors += 1
-                        logger.warning(f"Worker {worker_id}: Empty data received for request {request_count}")
+                    
+                    # Log progress every LOG_REQUESTS_INTERVAL requests
+                    if results['requests'] % LOG_REQUESTS_INTERVAL == 0:
+                        elapsed = time.time() - start_time
+                        success_rate = results['successful'] / results['requests'] if results['requests'] > 0 else 0
+                        logger.info(f"Warm-up progress: {results['requests']} requests completed in {elapsed:.1f}s (success rate: {success_rate:.2%})")
                 
                 # Check for too many consecutive errors
                 if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
@@ -127,7 +122,7 @@ class WarmUp:
                     break
                 
             except Exception as e:
-                logger.warning(f"Worker {worker_id} error during warm-up (request {request_count}): {e}")
+                logger.warning(f"Worker {worker_id} error during warm-up: {e}")
                 consecutive_errors += 1
                 with self.lock:
                     results['errors'] += 1
@@ -137,32 +132,4 @@ class WarmUp:
                     logger.error(f"Worker {worker_id} stopping due to {consecutive_errors} consecutive errors")
                     break
                     
-                # Exponential backoff for retries
-                retry_delay = min(ERROR_RETRY_DELAY * (2 ** min(consecutive_errors, 5)), 30)
-                logger.debug(f"Worker {worker_id}: Retrying in {retry_delay}s after error")
-                time.sleep(retry_delay)
-    
-    def _progress_monitor(self, results, start_time, duration_seconds):
-        """Monitor progress during warm-up and log status updates."""
-        last_report_time = start_time
-        
-        while time.time() - start_time < duration_seconds:
-            time.sleep(10)  # Report every 10 seconds
-            current_time = time.time()
-            elapsed = current_time - start_time
-            remaining = duration_seconds - elapsed
-            
-            with self.lock:
-                requests = results['requests']
-                successful = results['successful']
-                errors = results['errors']
-                bytes_downloaded = results['bytes']
-            
-            if requests > 0:
-                success_rate = successful / requests
-                throughput_mbps = (bytes_downloaded * 8) / (elapsed * 1_000_000) if elapsed > 0 else 0
-                logger.info(f"Warm-up progress: {elapsed:.1f}s elapsed, {remaining:.1f}s remaining, "
-                          f"{requests} requests ({successful} successful, {errors} errors), "
-                          f"{success_rate:.1%} success rate, {throughput_mbps:.1f} Mbps")
-            else:
-                logger.info(f"Warm-up progress: {elapsed:.1f}s elapsed, {remaining:.1f}s remaining, no requests yet")
+                time.sleep(ERROR_RETRY_DELAY)

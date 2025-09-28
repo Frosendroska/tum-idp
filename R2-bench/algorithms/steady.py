@@ -9,7 +9,7 @@ from persistence.base import BenchmarkRecord
 from configuration import (
     RANGE_SIZE_MB, DEFAULT_OBJECT_KEY, ERROR_RETRY_DELAY,
     PROGRESS_REPORT_INTERVAL, PROGRESS_MONITOR_INTERVAL,
-    MEGABITS_PER_MB, BYTES_PER_MB, BYTES_PER_GB, SECONDS_PER_HOUR, default=INITIAL_CONCURRENCY
+    MEGABITS_PER_MB, BYTES_PER_MB, BYTES_PER_GB, SECONDS_PER_HOUR, INITIAL_CONCURRENCY, LOG_REQUESTS_INTERVAL
 )
 
 logger = logging.getLogger(__name__)
@@ -114,11 +114,24 @@ class SteadyState:
                         self.total_latency += latency_ms
                     else:
                         self.errors += 1
+                    
+                    # Log progress every LOG_REQUESTS_INTERVAL requests
+                    if self.total_requests % LOG_REQUESTS_INTERVAL == 0:
+                        elapsed = time.time() - self.start_time if self.start_time else 0
+                        success_rate = self.successful_requests / self.total_requests if self.total_requests > 0 else 0
+                        logger.info(f"Steady state progress: {self.total_requests} requests completed in {elapsed:.1f}s (success rate: {success_rate:.2%})")
                                 
             except Exception as e:
                 logger.warning(f"Worker {worker_id} error: {e}")
                 with self.lock:
                     self.errors += 1
+                    
+                    # Log progress every LOG_REQUESTS_INTERVAL requests (including errors)
+                    if self.total_requests % LOG_REQUESTS_INTERVAL == 0:
+                        elapsed = time.time() - self.start_time if self.start_time else 0
+                        success_rate = self.successful_requests / self.total_requests if self.total_requests > 0 else 0
+                        logger.info(f"Steady state progress: {self.total_requests} requests completed in {elapsed:.1f}s (success rate: {success_rate:.2%})")
+                
                 time.sleep(ERROR_RETRY_DELAY)
         
         logger.debug(f"Worker {worker_id} finished")

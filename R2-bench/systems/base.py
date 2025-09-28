@@ -38,9 +38,9 @@ class ObjectStorageSystem:
                     retries={"max_attempts": 3}, 
                     # Increase connection pool for concurrent operations
                     max_pool_connections=MAX_CONCURRENCY,
-                    # Add connection timeout settings - increased for large downloads
+                    # Add connection timeout settings
                     connect_timeout=30,
-                    read_timeout=300  # 5 minutes to handle 100MB downloads at 10 Mbps
+                    read_timeout=60
                 ),
             )
             logger.info(f"Initialized client for {self.endpoint}")
@@ -201,7 +201,6 @@ class ObjectStorageSystem:
     def download_range(self, key: str, start: int, length: int) -> tuple:
         """Download a range of an object and return (data, latency_ms)."""
         import time
-        from botocore.exceptions import ReadTimeoutError, IncompleteReadError
 
         try:
             start_time = time.time()
@@ -214,18 +213,10 @@ class ObjectStorageSystem:
             latency_ms = (time.time() - start_time) * 1000
 
             return data, latency_ms
-        except ReadTimeoutError as e:
-            logger.warning(f"Read timeout downloading range {start}-{start + length - 1} from {key}: {e}")
-            return None, 0
-        except IncompleteReadError as e:
-            logger.warning(f"Incomplete read downloading range {start}-{start + length - 1} from {key}: {e}")
-            return None, 0
         except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-            logger.warning(f"Client error downloading range {start}-{start + length - 1} from {key} ({error_code}): {e}")
-            return None, 0
-        except Exception as e:
-            logger.warning(f"Unexpected error downloading range {start}-{start + length - 1} from {key}: {e}")
+            logger.error(
+                f"Failed to download range {start}-{start + length - 1} from {key}: {e}"
+            )
             return None, 0
 
     def object_exists(self, key: str) -> bool:
