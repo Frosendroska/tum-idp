@@ -43,7 +43,10 @@ class ParquetPersistence:
                 'bytes': record.bytes,
                 'latency_ms': record.latency_ms,
                 'http_status': record.http_status,
-                'concurrency': record.concurrency
+                'concurrency': record.concurrency,
+                'phase_id': record.phase_id,
+                'start_ts': record.start_ts,
+                'end_ts': record.end_ts
             })
         
         df = pd.DataFrame(data)

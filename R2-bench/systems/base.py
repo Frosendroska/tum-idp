@@ -38,9 +38,6 @@ class ObjectStorageSystem:
                     retries={"max_attempts": 3}, 
                     # Increase connection pool for concurrent operations
                     max_pool_connections=MAX_CONCURRENCY,
-                    # Add connection timeout settings
-                    connect_timeout=30,
-                    read_timeout=60
                 ),
             )
             logger.info(f"Initialized client for {self.endpoint}")

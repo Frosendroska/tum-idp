@@ -6,7 +6,7 @@ import time
 import logging
 import threading
 from persistence.base import BenchmarkRecord
-from configuration import RANGE_SIZE_MB, DEFAULT_OBJECT_KEY, INITIAL_CONCURRENCY, ERROR_RETRY_DELAY, BYTES_PER_MB, BYTES_PER_GB, MAX_ERROR_RATE, MAX_CONSECUTIVE_ERRORS, LOG_REQUESTS_INTERVAL
+from configuration import RANGE_SIZE_MB, DEFAULT_OBJECT_KEY, INITIAL_CONCURRENCY, ERROR_RETRY_DELAY, BYTES_PER_MB, BYTES_PER_GB, MAX_ERROR_RATE, MAX_CONSECUTIVE_ERRORS, PROGRESS_INTERVAL
 
 
 logger = logging.getLogger(__name__)
@@ -110,8 +110,8 @@ class WarmUp:
                         results['errors'] += 1
                         consecutive_errors += 1
                     
-                    # Log progress every LOG_REQUESTS_INTERVAL requests
-                    if results['requests'] % LOG_REQUESTS_INTERVAL == 0:
+                    # Log progress every PROGRESS_INTERVAL requests
+                    if results['requests'] % PROGRESS_INTERVAL == 0:
                         elapsed = time.time() - start_time
                         success_rate = results['successful'] / results['requests'] if results['requests'] > 0 else 0
                         logger.info(f"Warm-up progress: {results['requests']} requests completed in {elapsed:.1f}s (success rate: {success_rate:.2%})")

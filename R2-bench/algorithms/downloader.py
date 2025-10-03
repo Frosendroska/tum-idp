@@ -5,7 +5,7 @@ Simple downloader algorithm for the R2 benchmark.
 import time
 import logging
 from persistence.base import BenchmarkRecord
-from configuration import DEFAULT_OBJECT_KEY, CHUNK_SIZE_MB, BYTES_PER_GB, BYTES_PER_MB
+from configuration import DEFAULT_OBJECT_KEY, BYTES_PER_GB, BYTES_PER_MB
 
 logger = logging.getLogger(__name__)
 

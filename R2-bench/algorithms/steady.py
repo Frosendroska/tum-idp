@@ -8,8 +8,8 @@ import threading
 from persistence.base import BenchmarkRecord
 from configuration import (
     RANGE_SIZE_MB, DEFAULT_OBJECT_KEY, ERROR_RETRY_DELAY,
-    PROGRESS_REPORT_INTERVAL, PROGRESS_MONITOR_INTERVAL,
-    MEGABITS_PER_MB, BYTES_PER_MB, BYTES_PER_GB, SECONDS_PER_HOUR, INITIAL_CONCURRENCY, LOG_REQUESTS_INTERVAL
+    PROGRESS_INTERVAL,
+    MEGABITS_PER_MB, BYTES_PER_MB, BYTES_PER_GB, SECONDS_PER_HOUR, INITIAL_CONCURRENCY, PROGRESS_INTERVAL
 )
 
 logger = logging.getLogger(__name__)
@@ -58,9 +58,6 @@ class SteadyState:
         try:
             # Start worker threads
             self._start_workers()
-            
-            # Monitor progress
-            self._monitor_progress()
             
             # Wait for completion or stop
             while time.time() < self.end_time and not self.stop_event.is_set():
@@ -115,8 +112,8 @@ class SteadyState:
                     else:
                         self.errors += 1
                     
-                    # Log progress every LOG_REQUESTS_INTERVAL requests
-                    if self.total_requests % LOG_REQUESTS_INTERVAL == 0:
+                    # Log progress every PROGRESS_INTERVAL requests
+                    if self.total_requests % PROGRESS_INTERVAL == 0:
                         elapsed = time.time() - self.start_time if self.start_time else 0
                         success_rate = self.successful_requests / self.total_requests if self.total_requests > 0 else 0
                         logger.info(f"Steady state progress: {self.total_requests} requests completed in {elapsed:.1f}s (success rate: {success_rate:.2%})")
@@ -126,8 +123,8 @@ class SteadyState:
                 with self.lock:
                     self.errors += 1
                     
-                    # Log progress every LOG_REQUESTS_INTERVAL requests (including errors)
-                    if self.total_requests % LOG_REQUESTS_INTERVAL == 0:
+                    # Log progress every PROGRESS_INTERVAL requests (including errors)
+                    if self.total_requests % PROGRESS_INTERVAL == 0:
                         elapsed = time.time() - self.start_time if self.start_time else 0
                         success_rate = self.successful_requests / self.total_requests if self.total_requests > 0 else 0
                         logger.info(f"Steady state progress: {self.total_requests} requests completed in {elapsed:.1f}s (success rate: {success_rate:.2%})")
@@ -135,43 +132,6 @@ class SteadyState:
                 time.sleep(ERROR_RETRY_DELAY)
         
         logger.debug(f"Worker {worker_id} finished")
-    
-    def _monitor_progress(self):
-        """Monitor progress during execution."""
-        logger.info("Starting progress monitoring")
-        
-        last_report_time = time.time()
-        
-        while time.time() < self.end_time and not self.stop_event.is_set():
-            current_time = time.time()
-            
-            # Report progress every minute
-            if current_time - last_report_time >= PROGRESS_REPORT_INTERVAL:
-                self._report_progress()
-                last_report_time = current_time
-            
-            # Sleep for a short interval
-            time.sleep(PROGRESS_MONITOR_INTERVAL)
-    
-    def _report_progress(self):
-        """Report current progress."""
-        if not self.start_time:
-            return
-        
-        elapsed = time.time() - self.start_time
-        remaining = self.end_time - time.time()
-        
-        success_rate = self.successful_requests / self.total_requests if self.total_requests > 0 else 0
-        avg_latency = self.total_latency / self.successful_requests if self.successful_requests > 0 else 0
-        
-        if elapsed > 0:
-            throughput_mbps = (self.total_bytes * 8) / (elapsed * MEGABITS_PER_MB)
-        else:
-            throughput_mbps = 0
-        
-        logger.info(f"Progress: {elapsed/SECONDS_PER_HOUR:.1f}h elapsed, {remaining/SECONDS_PER_HOUR:.1f}h remaining")
-        logger.info(f"Requests: {self.total_requests} total, {self.successful_requests} successful ({success_rate:.2%})")
-        logger.info(f"Throughput: {throughput_mbps:.1f} Mbps, Avg Latency: {avg_latency:.1f} ms")
     
     def _stop_workers(self):
         """Stop all worker threads."""

@@ -11,7 +11,7 @@ from unittest.mock import Mock, MagicMock
 # Add the parent directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from algorithms.plateu_check import PlateauCheck
+from algorithms.plateau_check import PlateauCheck
 from algorithms.warm_up import WarmUp
 from algorithms.ramp import Ramp
 from configuration import PLATEAU_THRESHOLD

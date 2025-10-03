@@ -8,11 +8,11 @@ import threading
 from persistence.base import BenchmarkRecord
 from persistence.parquet import ParquetPersistence
 from configuration import (
-    RANGE_SIZE_MB, DEFAULT_OBJECT_KEY, RAMP_STEP_SECONDS, RAMP_STEP_CONCURRENCY, WORKER_BANDWIDTH_MBPS,
+    RANGE_SIZE_MB, DEFAULT_OBJECT_KEY, RAMP_STEP_MINUTES, RAMP_STEP_CONCURRENCY, SYSTEM_BANDWIDTH_MBPS,
     PLATEAU_THRESHOLD, DEFAULT_OUTPUT_DIR, MEGABITS_PER_MB, BYTES_PER_MB, BYTES_PER_GB,
-    MAX_ERROR_RATE, MIN_REQUESTS_FOR_ERROR_CHECK, MAX_CONSECUTIVE_ERRORS, LOG_REQUESTS_INTERVAL
+    MAX_ERROR_RATE, MIN_REQUESTS_FOR_ERROR_CHECK, MAX_CONSECUTIVE_ERRORS, PROGRESS_INTERVAL
 )
-from algorithms.plateu_check import PlateauCheck
+from algorithms.plateau_check import PlateauCheck
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +26,15 @@ class Ramp:
         self.storage_system = storage_system
         self.initial_concurrency = initial_concurrency
         self.ramp_step = ramp_step or RAMP_STEP_CONCURRENCY
-        self.step_duration_seconds = step_duration_seconds or RAMP_STEP_SECONDS
+        self.step_duration_seconds = step_duration_seconds or (RAMP_STEP_MINUTES * 60)
         self.object_key = object_key or DEFAULT_OBJECT_KEY
         self.range_size_mb = RANGE_SIZE_MB
-        self.worker_bandwidth_mbps = worker_bandwidth_mbps if worker_bandwidth_mbps is not None else WORKER_BANDWIDTH_MBPS
-        self.plateau_checker = PlateauCheck(threshold=plateau_threshold or PLATEAU_THRESHOLD, worker_bandwidth_mbps=self.worker_bandwidth_mbps)
+        self.system_bandwidth_mbps = worker_bandwidth_mbps if worker_bandwidth_mbps is not None else SYSTEM_BANDWIDTH_MBPS
+        self.plateau_checker = PlateauCheck(threshold=plateau_threshold or PLATEAU_THRESHOLD, system_bandwidth_mbps=self.system_bandwidth_mbps)
         self.persistence = ParquetPersistence(output_dir=output_dir or DEFAULT_OUTPUT_DIR)
         self.records_lock = threading.Lock()
         
-        logger.info(f"Initialized ramp with plateau detection and worker bandwidth limit: {initial_concurrency} -> ?, step {self.ramp_step} every {self.step_duration_seconds}s, worker limit: {self.worker_bandwidth_mbps} Mbps")
+        logger.info(f"Initialized ramp with plateau detection and system bandwidth limit: {initial_concurrency} -> ?, step {self.ramp_step} every {self.step_duration_seconds}s, system limit: {self.system_bandwidth_mbps} Mbps")
     
     def execute_step(self, concurrency: int):
         """Execute one ramp step at the given concurrency level."""
@@ -126,8 +126,8 @@ class Ramp:
                     else:
                         results['errors'] += 1
                     
-                    # Log progress every LOG_REQUESTS_INTERVAL requests
-                    if results['requests'] % LOG_REQUESTS_INTERVAL == 0:
+                    # Log progress every PROGRESS_INTERVAL requests
+                    if results['requests'] % PROGRESS_INTERVAL == 0:
                         elapsed = time.time() - step_start
                         success_rate = results['successful'] / results['requests'] if results['requests'] > 0 else 0
                         logger.info(f"Ramp step progress: {results['requests']} requests completed in {elapsed:.1f}s (concurrency: {concurrency}, success rate: {success_rate:.2%})")
@@ -152,8 +152,8 @@ class Ramp:
                     self.persistence.store_record(error_record)
                     results['errors'] += 1
                     
-                    # Log progress every LOG_REQUESTS_INTERVAL requests (including errors)
-                    if results['requests'] % LOG_REQUESTS_INTERVAL == 0:
+                    # Log progress every PROGRESS_INTERVAL requests (including errors)
+                    if results['requests'] % PROGRESS_INTERVAL == 0:
                         elapsed = time.time() - step_start
                         success_rate = results['successful'] / results['requests'] if results['requests'] > 0 else 0
                         logger.info(f"Ramp step progress: {results['requests']} requests completed in {elapsed:.1f}s (concurrency: {concurrency}, success rate: {success_rate:.2%})")
