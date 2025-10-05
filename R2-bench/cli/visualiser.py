@@ -37,35 +37,47 @@ class BenchmarkVisualizer:
             self.data = None
     
     def create_throughput_timeline(self):
-        """Create throughput timeline plot."""
+        """Create throughput timeline plot with phase information."""
         if self.data is None or len(self.data) == 0:
             logger.warning("No data available for throughput plot")
             return None
         
         try:
-            plt.figure(figsize=(12, 6))
+            plt.figure(figsize=(15, 8))
             
             # Convert timestamp to datetime
             self.data['datetime'] = pd.to_datetime(self.data['ts'], unit='s')
             
             # Group by time windows and calculate throughput
-            self.data['time_window'] = self.data['datetime'].dt.floor('1min')
+            self.data['time_window'] = self.data['datetime'].dt.floor('30s')  # 30-second windows for better granularity
             throughput_data = self.data.groupby('time_window').agg({
                 'bytes': 'sum',
-                'latency_ms': 'mean'
+                'latency_ms': 'mean',
+                'phase_id': 'first'  # Get the phase_id for this time window
             }).reset_index()
             
             # Calculate throughput in Mbps
-            throughput_data['throughput_mbps'] = (throughput_data['bytes'] * 8) / (60 * 1_000_000)
+            throughput_data['throughput_mbps'] = (throughput_data['bytes'] * 8) / (30 * 1_000_000)  # 30-second windows
             
-            # Plot throughput over time
-            plt.plot(throughput_data['time_window'], throughput_data['throughput_mbps'], 
-                    marker='o', linewidth=2, markersize=4)
-            plt.title('Throughput Timeline')
-            plt.xlabel('Time')
-            plt.ylabel('Throughput (Mbps)')
+            # Get unique phases for coloring
+            phases = self.data['phase_id'].unique()
+            phase_colors = plt.cm.Set1(range(len(phases)))
+            phase_color_map = dict(zip(phases, phase_colors))
+            
+            # Plot throughput over time with phase colors
+            for phase in phases:
+                phase_data = throughput_data[throughput_data['phase_id'] == phase]
+                if len(phase_data) > 0:
+                    plt.plot(phase_data['time_window'], phase_data['throughput_mbps'], 
+                            marker='o', linewidth=2, markersize=4, 
+                            color=phase_color_map[phase], label=f'Phase: {phase}')
+            
+            plt.title('Throughput Timeline by Phase', fontsize=14)
+            plt.xlabel('Time', fontsize=12)
+            plt.ylabel('Throughput (Mbps)', fontsize=12)
             plt.grid(True, alpha=0.3)
             plt.xticks(rotation=45)
+            plt.legend()
             plt.tight_layout()
             
             # Save plot
