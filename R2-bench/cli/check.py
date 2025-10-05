@@ -142,12 +142,12 @@ class CapacityChecker:
         while not self.stop_event.is_set():
             try:
                 # Acquire semaphore permit
-                logger.debug(f"Worker {worker_id} attempting to acquire semaphore permit (available: {self.semaphore.available_permits()})")
+                logger.info(f"Worker {worker_id} attempting to acquire semaphore permit (available: {self.semaphore.available_permits()})")
                 if not self.semaphore.acquire(timeout=1.0):
-                    logger.debug(f"Worker {worker_id} failed to acquire semaphore permit (available: {self.semaphore.available_permits()})")
+                    logger.warning(f"Worker {worker_id} failed to acquire semaphore permit (available: {self.semaphore.available_permits()})")
                     continue
                 
-                logger.debug(f"Worker {worker_id} acquired semaphore permit (remaining: {self.semaphore.available_permits()})")
+                logger.info(f"Worker {worker_id} acquired semaphore permit (remaining: {self.semaphore.available_permits()})")
                 
                 # Calculate range for this worker
                 range_start = (worker_id * RANGE_SIZE_MB * BYTES_PER_MB) % BYTES_PER_GB
@@ -160,8 +160,8 @@ class CapacityChecker:
                 phase_info = self.phase_manager.get_phase_info()
                 phase_id = phase_info.get('phase_id', '')
                 
-                # Log phase assignment for debugging
-                logger.debug(f"Worker {worker_id} assigned to phase: '{phase_id}' (target_concurrency: {phase_info.get('target_concurrency', 'N/A')})")
+                # Debug: Log phase_id assignment
+                logger.info(f"Worker {worker_id} assigned to phase: '{phase_id}' (target_concurrency: {phase_info.get('target_concurrency', 'N/A')})")
                 
                 # Check if we should start measuring for this phase
                 if phase_id and not phase_info.get('step_started', False):
@@ -176,11 +176,13 @@ class CapacityChecker:
                 
                 while retry_count < max_retries:
                     try:
+                        logger.debug(f"Worker {worker_id} attempting download: {range_start}-{range_start + range_length - 1} bytes")
                         data, latency_ms = self.storage_system.download_range(
                             self.object_key, range_start, range_length
                         )
                         if data and len(data) > 0:
                             http_status = 200
+                            logger.debug(f"Worker {worker_id} successful download: {len(data)} bytes in {latency_ms:.1f}ms")
                             break
                         else:
                             retry_count += 1
@@ -275,11 +277,26 @@ class CapacityChecker:
         # Get step statistics
         step_stats = self.metrics_aggregator.get_step_stats(phase_id)
         
+        # Debug: Check total records and phase attribution
+        total_records = self.metrics_aggregator.get_total_records()
+        logger.info(f"Debug: Total records in aggregator: {total_records}")
+        
         if step_stats:
             logger.info(f"Phase {phase_id} completed: {step_stats['throughput_mbps']:.1f} Mbps, "
                        f"{step_stats['successful_requests']}/{step_stats['total_requests']} requests")
         else:
             logger.warning(f"No step statistics available for phase {phase_id}")
+            # Debug: Check what records exist
+            with self.metrics_aggregator.lock:
+                phase_records = [r for r in self.metrics_aggregator.records if r.phase_id == phase_id]
+                logger.warning(f"Debug: Found {len(phase_records)} records for phase {phase_id}")
+                if phase_records:
+                    logger.warning(f"Debug: First record start_ts: {phase_records[0].start_ts}, step_start_ts: {self.metrics_aggregator.phase_step_times.get(phase_id, 'Not set')}")
+                
+                # Debug: Show all unique phase_ids in records
+                all_phase_ids = set(r.phase_id for r in self.metrics_aggregator.records)
+                logger.warning(f"Debug: All phase_ids in records: {all_phase_ids}")
+                logger.warning(f"Debug: Looking for phase_id: '{phase_id}'")
             # Create fallback statistics to ensure we always have some data
             step_stats = {
                 'phase_id': phase_id,
@@ -299,9 +316,16 @@ class CapacityChecker:
         
         return step_stats
     
-    def _ensure_test_object_exists(self):
-        """Ensure test object exists, create if necessary."""
+    def check_capacity(self, object_key: str = None):
+        """Execute the refactored capacity discovery process."""
+        if object_key:
+            self.object_key = object_key
+        
+        logger.info("Starting capacity discovery process")
+        logger.info(f"Using object key: {self.object_key}")
+        
         try:
+            # Check if object exists
             logger.info("Checking if test object exists...")
             response = self.storage_system.client.head_object(Bucket=self.storage_system.bucket_name, Key=self.object_key)
             logger.info(f"Test object found: {response['ContentLength']} bytes")
@@ -324,117 +348,87 @@ class CapacityChecker:
                 logger.error(f"Failed to create test object: {upload_error}")
                 logger.error("Please run 'python cli.py upload --storage r2' first to create the test object")
                 raise
-
-    def _run_warmup_phase(self):
-        """Run the warm-up phase."""
-        logger.info("=== Phase 1: Concurrent Warm-up ===")
-        self.phase_manager.begin_phase("warmup", INITIAL_CONCURRENCY)
         
-        # Start workers for this phase
-        self._start_workers_for_phase(INITIAL_CONCURRENCY)
-        
-        # Give workers a moment to start making requests before recording step start time
-        time.sleep(2)  # Allow workers to initialize and start making requests
-        
-        # Set step start time after workers are actually running
-        self.metrics_aggregator.set_phase_step_time("warmup", time.time())
-        
-        warm_up_duration = WARM_UP_MINUTES * 60
-        warm_up_results = self._run_phase(warm_up_duration)
-        
-        logger.info(f"Warm-up completed: {warm_up_results['throughput_mbps']:.1f} Mbps")
-        return warm_up_results
-
-    def _run_rampup_phase(self):
-        """Run the ramp-up phase to find optimal concurrency."""
-        logger.info("=== Phase 2: Ramp-up ===")
-        logger.info(f"Starting ramp: {INITIAL_CONCURRENCY} -> {MAX_CONCURRENCY}, step {RAMP_STEP_CONCURRENCY} every {RAMP_STEP_MINUTES}m")
-        
-        current_concurrency = INITIAL_CONCURRENCY
-        best_throughput = 0
-        best_concurrency = current_concurrency
-        step_results = []
-        step_count = 0
-        plateau_reached = False
-        reason = 'Max concurrency reached'
-        
-        while current_concurrency <= MAX_CONCURRENCY and not self.stop_event.is_set():
-            step_count += 1
-            phase_id = f"ramp_{step_count}"
+        try:
+            # Phase 1: Warm-up
+            logger.info("=== Phase 1: Concurrent Warm-up ===")
+            self.phase_manager.begin_phase("warmup", INITIAL_CONCURRENCY)
             
-            # Begin new ramp step
-            self.phase_manager.begin_phase(phase_id, current_concurrency)
-            
-            # Start workers for this concurrency level
-            self._start_workers_for_phase(current_concurrency)
+            # Start workers for this phase
+            self._start_workers_for_phase(INITIAL_CONCURRENCY)
             
             # Give workers a moment to start making requests before recording step start time
             time.sleep(2)  # Allow workers to initialize and start making requests
             
             # Set step start time after workers are actually running
-            self.metrics_aggregator.set_phase_step_time(phase_id, time.time())
+            self.metrics_aggregator.set_phase_step_time("warmup", time.time())
             
-            logger.info(f"Starting ramp step {step_count}: {current_concurrency} connections")
+            warm_up_duration = WARM_UP_MINUTES * 60
+            warm_up_results = self._run_phase(warm_up_duration)
             
-            # Run the step
-            step_result = self._run_phase(RAMP_STEP_MINUTES * 60)
-            step_results.append(step_result)
-            
-            # Check error rate
-            total_requests = step_result['total_requests']
-            error_rate = step_result['error_rate']
-            
-            if total_requests >= MIN_REQUESTS_FOR_ERROR_CHECK and error_rate > MAX_ERROR_RATE:
-                logger.warning(f"High error rate detected: {error_rate:.1%}")
-                break
-            
-            # Add measurement to plateau checker
-            self.plateau_checker.add_measurement(
-                current_concurrency, 
-                step_result['throughput_mbps'], 
-                step_result['duration_seconds']
-            )
-            
-            # Check if we found better throughput
-            if step_result['throughput_mbps'] > best_throughput:
-                best_throughput = step_result['throughput_mbps']
-                best_concurrency = current_concurrency
-                logger.info(f"New best: {best_concurrency} conn, {best_throughput:.1f} Mbps")
-            
-            # Check for plateau
-            plateau_reached, reason = self.plateau_checker.is_plateau_reached()
-            if plateau_reached:
-                logger.info(f"Plateau detected: {reason}")
-                break
-            
-            # Increase concurrency for next step
-            current_concurrency += RAMP_STEP_CONCURRENCY
-        
-        return {
-            'best_concurrency': best_concurrency,
-            'best_throughput_mbps': best_throughput,
-            'step_results': step_results,
-            'plateau_reached': plateau_reached,
-            'reason': reason
-        }
-
-    def check_capacity(self, object_key: str = None):
-        """Execute the refactored capacity discovery process."""
-        if object_key:
-            self.object_key = object_key
-        
-        logger.info("Starting capacity discovery process")
-        logger.info(f"Using object key: {self.object_key}")
-        
-        try:
-            # Ensure test object exists
-            self._ensure_test_object_exists()
-            
-            # Phase 1: Warm-up
-            warm_up_results = self._run_warmup_phase()
+            logger.info(f"Warm-up completed: {warm_up_results['throughput_mbps']:.1f} Mbps")
             
             # Phase 2: Ramp-up to find optimal concurrency
-            ramp_results = self._run_rampup_phase()
+            logger.info("=== Phase 2: Ramp-up ===")
+            logger.info(f"Starting ramp: {INITIAL_CONCURRENCY} -> {MAX_CONCURRENCY}, step {RAMP_STEP_CONCURRENCY} every {RAMP_STEP_MINUTES}m")
+            
+            current_concurrency = INITIAL_CONCURRENCY
+            best_throughput = 0
+            best_concurrency = current_concurrency
+            step_results = []
+            step_count = 0
+            
+            while current_concurrency <= MAX_CONCURRENCY and not self.stop_event.is_set():
+                step_count += 1
+                phase_id = f"ramp_{step_count}"
+                
+                # Begin new ramp step
+                self.phase_manager.begin_phase(phase_id, current_concurrency)
+                
+                # Start workers for this concurrency level
+                self._start_workers_for_phase(current_concurrency)
+                
+                # Give workers a moment to start making requests before recording step start time
+                time.sleep(2)  # Allow workers to initialize and start making requests
+                
+                # Set step start time after workers are actually running
+                self.metrics_aggregator.set_phase_step_time(phase_id, time.time())
+                
+                logger.info(f"Starting ramp step {step_count}: {current_concurrency} connections")
+                
+                # Run the step
+                step_result = self._run_phase(RAMP_STEP_MINUTES * 60)
+                step_results.append(step_result)
+                
+                # Check error rate
+                total_requests = step_result['total_requests']
+                error_rate = step_result['error_rate']
+                
+                if total_requests >= MIN_REQUESTS_FOR_ERROR_CHECK and error_rate > MAX_ERROR_RATE:
+                    logger.warning(f"High error rate detected: {error_rate:.1%}")
+                    break
+                
+                # Add measurement to plateau checker
+                self.plateau_checker.add_measurement(
+                    current_concurrency, 
+                    step_result['throughput_mbps'], 
+                    step_result['duration_seconds']
+                )
+                
+                # Check if we found better throughput
+                if step_result['throughput_mbps'] > best_throughput:
+                    best_throughput = step_result['throughput_mbps']
+                    best_concurrency = current_concurrency
+                    logger.info(f"New best: {best_concurrency} conn, {best_throughput:.1f} Mbps")
+                
+                # Check for plateau
+                plateau_reached, reason = self.plateau_checker.is_plateau_reached()
+                if plateau_reached:
+                    logger.info(f"Plateau detected: {reason}")
+                    break
+                
+                # Increase concurrency for next step
+                current_concurrency += RAMP_STEP_CONCURRENCY
             
             # Get plateau summary
             plateau_summary = self.plateau_checker.get_plateau_summary()
@@ -444,14 +438,14 @@ class CapacityChecker:
             
             # Report results
             logger.info("=== Capacity Discovery Results ===")
-            logger.info(f"Best concurrency: {ramp_results['best_concurrency']}")
-            logger.info(f"Best throughput: {ramp_results['best_throughput_mbps']:.1f} Mbps")
-            logger.info(f"Steps completed: {len(ramp_results['step_results'])}")
-            logger.info(f"Plateau detected: {ramp_results['plateau_reached']}")
-            logger.info(f"Plateau reason: {ramp_results['reason']}")
+            logger.info(f"Best concurrency: {best_concurrency}")
+            logger.info(f"Best throughput: {best_throughput:.1f} Mbps")
+            logger.info(f"Steps completed: {len(step_results)}")
+            logger.info(f"Plateau detected: {plateau_reached if 'plateau_reached' in locals() else False}")
+            logger.info(f"Plateau reason: {reason if 'reason' in locals() else 'Max concurrency reached'}")
             
             # Show step-by-step results
-            for i, step in enumerate(ramp_results['step_results']):
+            for i, step in enumerate(step_results):
                 logger.info(f"Step {i+1}: {step['concurrency']} conn -> {step['throughput_mbps']:.1f} Mbps")
             
             if parquet_file:
@@ -460,18 +454,18 @@ class CapacityChecker:
             return {
                 'warm_up': warm_up_results,
                 'ramp_up': {
-                    'best_concurrency': ramp_results['best_concurrency'],
-                    'best_throughput_mbps': ramp_results['best_throughput_mbps'],
-                    'step_results': ramp_results['step_results'],
-                    'plateau_detected': ramp_results['plateau_reached'],
-                    'plateau_reason': ramp_results['reason'],
+                    'best_concurrency': best_concurrency,
+                    'best_throughput_mbps': best_throughput,
+                    'step_results': step_results,
+                    'plateau_detected': plateau_reached if 'plateau_reached' in locals() else False,
+                    'plateau_reason': reason if 'reason' in locals() else 'Max concurrency reached',
                     'plateau_summary': plateau_summary,
                     'parquet_file': parquet_file
                 },
-                'optimal_concurrency': ramp_results['best_concurrency'],
-                'max_throughput_mbps': ramp_results['best_throughput_mbps'],
-                'plateau_detected': ramp_results['plateau_reached'],
-                'plateau_reason': ramp_results['reason']
+                'optimal_concurrency': best_concurrency,
+                'max_throughput_mbps': best_throughput,
+                'plateau_detected': plateau_reached if 'plateau_reached' in locals() else False,
+                'plateau_reason': reason if 'reason' in locals() else 'Max concurrency reached'
             }
             
         except KeyboardInterrupt:
