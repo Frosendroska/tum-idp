@@ -26,8 +26,8 @@ class ObjectStorageSystem:
         """Set up the storage client."""
         try:
             session = boto3.Session(
-                aws_access_key_id=self.credentials.get("aws_access_key_id"),
-                aws_secret_access_key=self.credentials.get("aws_secret_access_key"),
+                aws_access_key_id=self.credentials.get("access_key_id"),
+                aws_secret_access_key=self.credentials.get("secret_access_key"),
                 region_name=self.credentials.get("region_name", "auto"),
             )
 

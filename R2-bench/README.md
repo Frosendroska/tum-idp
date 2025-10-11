@@ -31,13 +31,13 @@ Non-Goals:
 *Cloudflare R2:*
 ## Cloudflare R2
 
-| Limit                   | Free-tier value                                 | Rationale                                 |
-|-------------------------|-------------------------------------------------|-------------------------------------------|
-| Storage                 | ≤ 10 GiB-month                                  | Keeps us under the hard cap & cost-free   |
-| Class B (GET) ops       | ≤ 10 M / month                                  | Plenty of headroom for a multi-hour test  |
-| Egress                  | $0                                              | Core R2 value proposition                 |
-| Endpoint                | `https://<ACCOUNT>.r2.cloudflarestorage.com`    | Region = auto (EU bucket)                 |
-| Rate-limit              | `r2.dev` throttles at ~hundreds RPS             | Must use the S3 endpoint above            |
+| Limit             | Free-tier value                              | Rationale                                |
+| ----------------- | -------------------------------------------- | ---------------------------------------- |
+| Storage           | ≤ 10 GiB-month                               | Keeps us under the hard cap & cost-free  |
+| Class B (GET) ops | ≤ 10 M / month                               | Plenty of headroom for a multi-hour test |
+| Egress            | $0                                           | Core R2 value proposition                |
+| Endpoint          | `https://<ACCOUNT>.r2.cloudflarestorage.com` | Region = auto (EU bucket)                |
+| Rate-limit        | `r2.dev` throttles at ~hundreds RPS          | Must use the S3 endpoint above           |
 
 *AWS EC2 (Client):*
 - **Instance:** Start with c8gn.large (up to 100 Gbps); scale to c8gn.4xlarge (200 Gbps) and c8gn.8xlarge (300 Gbps) if R2 allows.
@@ -80,6 +80,11 @@ Non-Goals:
 - Record maximum sustainable NIC bandwidth; verify R2 isn’t the immediate bottleneck.
 
 Repeat this phase with different EC2 instances (200 Gbps, then 300 Gbps) to find the one where the R2 is a bottleneck and not the EC2.
+
+- r5.xlarge       --   32 GiB	  4 vCPUs	  EBS only	 Up to 25 Gigabit	 $0.298 hourly
+- c5n.9xlarge     --   96 GiB	  36 vCPUs	EBS only	 50 Gigabit	       $1.944 hourly
+- c7gn.8xlarge    --   64 GiB   32 vCPUs	EBS only	 100 Gigabit	     $1.9968 hourly
+- hpc7g.16xlarge	--   128 GiB	64 vCPUs	EBS only	 200 Gigabit	     $1.6832 hourly
 
 - *Phase 2*
 When we find the maximum throughput, we can start an actual test that will find a plateau and microbenchmark the system.
@@ -160,14 +165,14 @@ benchmark
 
 *Plots for Grafana and Python script:*
 
-| Plot                 | Axis                                    | Insight                                     |
-|----------------------|-----------------------------------------|---------------------------------------------|
-| Throughput timeline  | Mbps vs. time (line)                    | Long-term stability & drift                 |
-| Latency CDF          | Probability vs. latency_ms (step)       | Tail behaviour (p99/p99.9)                  |
-| Error histogram      | Count vs. HTTP code (bar)               | Frequency and class of failures             |
-| Concurrency heatmap  | C vs. time, colour = Mbps               | Highlights plateau and effect of ramp steps |
-| NIC health           | Mbps & retransmits vs. time (dual-axis) | Correlates network issues with latency spikes |
-| CPU vs. IRQs         | %CPU (user+sys) & IRQ/s (line)          | Detects kernel-level bottlenecks            |
+| Plot                | Axis                                    | Insight                                       |
+| ------------------- | --------------------------------------- | --------------------------------------------- |
+| Throughput timeline | Mbps vs. time (line)                    | Long-term stability & drift                   |
+| Latency CDF         | Probability vs. latency_ms (step)       | Tail behaviour (p99/p99.9)                    |
+| Error histogram     | Count vs. HTTP code (bar)               | Frequency and class of failures               |
+| Concurrency heatmap | C vs. time, colour = Mbps               | Highlights plateau and effect of ramp steps   |
+| NIC health          | Mbps & retransmits vs. time (dual-axis) | Correlates network issues with latency spikes |
+| CPU vs. IRQs        | %CPU (user+sys) & IRQ/s (line)          | Detects kernel-level bottlenecks              |
 
 
 ## Tooling
