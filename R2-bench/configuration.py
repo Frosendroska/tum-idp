@@ -1,18 +1,20 @@
 """
 Configuration constants for the R2 benchmark experiment.
 """
+import os
 
 # Object storage configuration
-R2_ENDPOINT = 'https://0a3675349f63db3e1f510c90ed0002ce.r2.cloudflarestorage.com'
-S3_ENDPOINT = 'https://s3.eu-central-1.amazonaws.com'
-BUCKET_NAME = 'idp-bucket'
+BUCKET_NAME = os.getenv('BUCKET_NAME', '')
 
 # Common credentials
-AWS_ACCESS_KEY_ID = '14675cbcde7c6f12dfd15cd3949b0310'
-AWS_SECRET_ACCESS_KEY = '18e5fb95377340203c42e28d395861f277b94a9c5dfb755c6f74cd18f7e38129'
-
-# AWS configuration
+S3_ENDPOINT = os.getenv('S3_ENDPOINT', '')
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY', '')
 AWS_REGION = 'eu-central-1'
+
+R2_ENDPOINT = os.getenv('R2_ENDPOINT', '')
+R2_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID', '')
+R2_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY', '')
 
 # System bandwidth limits
 SYSTEM_BANDWIDTH_MBPS = 100  # Total system bandwidth limit for single EC2 instance
