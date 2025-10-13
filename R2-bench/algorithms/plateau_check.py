@@ -39,12 +39,12 @@ class PlateauCheck:
             if total_throughput >= self.system_bandwidth_mbps:
                 return True, f"System bandwidth limit reached: {total_throughput:.1f} Mbps >= {self.system_bandwidth_mbps} Mbps limit"
         
-        # Check for plateau (need at least 3 measurements)
-        if len(self.measurements) < 3:
+        # Check for plateau (need at least 5 measurements)
+        if len(self.measurements) < 5:
             return False, "Not enough measurements for plateau detection"
         
-        # Get last 3 measurements
-        recent = self.measurements[-3:]
+        # Get last 5 measurements
+        recent = self.measurements[-5:]
         
         # Calculate improvement between consecutive measurements
         improvements = []

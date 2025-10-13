@@ -17,7 +17,7 @@ R2_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID', '')
 R2_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY', '')
 
 # System bandwidth limits
-SYSTEM_BANDWIDTH_MBPS = 100  # Total system bandwidth limit for single EC2 instance
+SYSTEM_BANDWIDTH_MBPS = 25000  # Total system bandwidth limit for single EC2 instance
 
 # Test parameters
 OBJECT_SIZE_GB = 9
@@ -28,16 +28,16 @@ DEFAULT_OBJECT_KEY = "test-object-9gb"
 WARM_UP_MINUTES = 1
 INITIAL_CONCURRENCY = 8
 
-RAMP_STEP_MINUTES = 1  
-RAMP_STEP_CONCURRENCY = 64  
-MAX_CONCURRENCY = 128  
+RAMP_STEP_MINUTES = 5  
+RAMP_STEP_CONCURRENCY = 32  
+MAX_CONCURRENCY = 1280  
 
 STEADY_STATE_HOURS = 3
 
 # Algorithm parameters
-PLATEAU_THRESHOLD = 0.05
+PLATEAU_THRESHOLD = 0.02
 ERROR_RETRY_DELAY = 1
-PROGRESS_INTERVAL = 100  # Log progress every N requests
+PROGRESS_INTERVAL = 10  # Log progress every N requests
 
 # CLI defaults
 DEFAULT_OUTPUT_DIR = "results"
