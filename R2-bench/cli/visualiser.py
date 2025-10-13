@@ -91,6 +91,140 @@ class BenchmarkVisualizer:
         except Exception as e:
             logger.error(f"Failed to create throughput plot: {e}")
             return None
+
+    def create_per_second_throughput_timeline(self):
+        """Create per-second throughput timeline using sweep line algorithm."""
+        if self.data is None or len(self.data) == 0:
+            logger.warning("No data available for per-second throughput plot")
+            return None
+        
+        try:
+            plt.figure(figsize=(15, 8))
+            
+            # Convert timestamp to datetime
+            self.data['datetime'] = pd.to_datetime(self.data['ts'], unit='s')
+            
+            # Use sweep line algorithm for per-second throughput calculation
+            per_second_data = self._calculate_per_second_throughput_sweep_line()
+            
+            if per_second_data is None or len(per_second_data) == 0:
+                logger.warning("No per-second data generated")
+                return None
+            
+            # Get unique phases for coloring
+            phases = self.data['phase_id'].unique()
+            phase_colors = plt.cm.Set1(range(len(phases)))
+            phase_color_map = dict(zip(phases, phase_colors))
+            
+            # Plot per-second throughput over time with phase colors
+            for phase in phases:
+                phase_data = per_second_data[per_second_data['phase_id'] == phase]
+                if len(phase_data) > 0:
+                    plt.plot(phase_data['second'], phase_data['throughput_mbps'], 
+                            marker='.', linewidth=1, markersize=2, 
+                            color=phase_color_map[phase], label=f'Phase: {phase}', alpha=0.7)
+            
+            plt.title('Per-Second Throughput Timeline by Phase', fontsize=14)
+            plt.xlabel('Time', fontsize=12)
+            plt.ylabel('Throughput (Mbps)', fontsize=12)
+            plt.grid(True, alpha=0.3)
+            plt.xticks(rotation=45)
+            plt.legend()
+            plt.tight_layout()
+            
+            # Save plot
+            output_file = os.path.join(self.output_dir, 'per_second_throughput_timeline.png')
+            plt.savefig(output_file, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            logger.info(f"Created per-second throughput timeline plot: {output_file}")
+            return output_file
+            
+        except Exception as e:
+            logger.error(f"Failed to create per-second throughput plot: {e}")
+            return None
+
+    def _calculate_per_second_throughput_sweep_line(self):
+        """Calculate per-second throughput using sweep line algorithm.
+        
+        The sweep line algorithm processes requests chronologically and maintains
+        a sliding window of requests that contribute to each second's throughput.
+        """
+        if len(self.data) == 0:
+            return None
+        
+        # Sort data by timestamp
+        sorted_data = self.data.sort_values('ts').copy()
+        
+        # Create time range for sweep line
+        start_time = sorted_data['ts'].min()
+        end_time = sorted_data['ts'].max()
+        
+        # Generate all seconds in the range
+        seconds = []
+        current_time = start_time
+        while current_time <= end_time:
+            seconds.append(current_time)
+            current_time += 1  # 1 second intervals
+        
+        # Initialize result data structure
+        per_second_results = []
+        
+        # Sweep line algorithm: process each second
+        for second_start in seconds:
+            second_end = second_start + 1
+            
+            # Find all requests that overlap with this second
+            # A request overlaps if it starts before the second ends and ends after the second starts
+            overlapping_requests = sorted_data[
+                (sorted_data['ts'] < second_end) & 
+                (sorted_data['ts'] + sorted_data['latency_ms'] / 1000 >= second_start)
+            ]
+            
+            if len(overlapping_requests) > 0:
+                # Calculate bytes transferred in this second
+                # For requests that span multiple seconds, we need to prorate
+                total_bytes = 0
+                phase_id = overlapping_requests['phase_id'].iloc[0]  # Assume consistent phase within second
+                
+                for _, request in overlapping_requests.iterrows():
+                    request_start = request['ts']
+                    request_end = request['ts'] + request['latency_ms'] / 1000
+                    
+                    # Calculate overlap duration with current second
+                    overlap_start = max(request_start, second_start)
+                    overlap_end = min(request_end, second_end)
+                    overlap_duration = max(0, overlap_end - overlap_start)
+                    
+                    # Calculate total request duration
+                    request_duration = request_end - request_start
+                    
+                    if request_duration > 0:
+                        # Prorate bytes based on overlap duration
+                        prorated_bytes = (request['bytes'] * overlap_duration) / request_duration
+                        total_bytes += prorated_bytes
+                
+                # Calculate throughput in Mbps for this second
+                throughput_mbps = (total_bytes * 8) / 1_000_000  # 1 second window
+                
+                per_second_results.append({
+                    'second': pd.to_datetime(second_start, unit='s'),
+                    'throughput_mbps': throughput_mbps,
+                    'phase_id': phase_id,
+                    'total_bytes': total_bytes,
+                    'request_count': len(overlapping_requests)
+                })
+        
+        if not per_second_results:
+            return None
+        
+        # Convert to DataFrame
+        result_df = pd.DataFrame(per_second_results)
+        
+        logger.info(f"Generated {len(result_df)} per-second throughput measurements")
+        logger.info(f"Time range: {result_df['second'].min()} to {result_df['second'].max()}")
+        
+        return result_df
     
     def create_latency_histogram(self):
         """Create latency histogram plot."""
@@ -456,6 +590,7 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
         plots = []
         
         plots.append(self.create_throughput_timeline())
+        plots.append(self.create_per_second_throughput_timeline())  # New per-second plot
         plots.append(self.create_latency_histogram())
         plots.append(self.create_latency_boxplot())
         plots.append(self.create_latency_scatter())
