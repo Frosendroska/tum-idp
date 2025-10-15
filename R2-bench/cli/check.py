@@ -7,8 +7,7 @@ import sys
 import logging
 import argparse
 import time
-import threading
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 # Add the current directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,10 +25,6 @@ from configuration import (
     DEFAULT_OBJECT_KEY,
     SYSTEM_BANDWIDTH_MBPS,
     MAX_CONCURRENCY,
-    RANGE_SIZE_MB,
-    BYTES_PER_MB,
-    BYTES_PER_GB,
-    MEGABITS_PER_MB,
     MAX_ERROR_RATE,
     MIN_REQUESTS_FOR_ERROR_CHECK,
     MAX_CONSECUTIVE_ERRORS,
@@ -38,13 +33,11 @@ from configuration import (
 )
 from systems.r2 import R2System
 from systems.aws import AWSSystem
-from common import ResizableSemaphore, PhaseManager
-from persistence.base import BenchmarkRecord
 from persistence.parquet import ParquetPersistence
-from persistence.metrics_aggregator import MetricsAggregator
 from algorithms.plateau_check import PlateauCheck
 from algorithms.warm_up import WarmUp
 from algorithms.ramp import Ramp
+from common.worker_pool import WorkerPool
 
 # Set up logging
 logging.basicConfig(
@@ -72,26 +65,19 @@ class CapacityChecker:
         self.storage_system = None
 
         # Initialize components
-        self.semaphore = ResizableSemaphore(INITIAL_CONCURRENCY)
-        self.phase_manager = PhaseManager()
-        self.metrics_aggregator = MetricsAggregator()
         self.persistence = ParquetPersistence()
         self.plateau_checker = PlateauCheck(
             system_bandwidth_mbps=self.system_bandwidth_mbps
         )
 
-        # Worker management
-        self.workers: List[threading.Thread] = []
-        self.stop_event = threading.Event()
-        self.active_workers = 0
-        self.max_workers = MAX_CONCURRENCY  # Maximum workers we'll ever need
+        # Shared worker pool for reuse across phases
+        self.worker_pool = None
 
         # Initialize storage system
         self._initialize_storage()
 
         logger.info(f"Initialized capacity checker for {storage_type.upper()}")
         logger.info(f"System bandwidth limit: {self.system_bandwidth_mbps} Mbps")
-        logger.info(f"Maximum workers: {self.max_workers}")
 
     def _initialize_storage(self):
         """Initialize the appropriate storage system."""
@@ -166,11 +152,14 @@ class CapacityChecker:
                 raise
 
         try:
-            # Phase 1: Warm-up using sophisticated WarmUp class
+            # Initialize shared worker pool
+            self.worker_pool = WorkerPool(self.storage_system, MAX_CONCURRENCY)
+            
+            # Phase 1: Warm-up using WarmUp class with shared worker pool
             logger.info("=== Phase 1: Concurrent Warm-up ===")
 
             warm_up = WarmUp(
-                storage_system=self.storage_system,
+                worker_pool=self.worker_pool,
                 warm_up_minutes=WARM_UP_MINUTES,
                 concurrency=INITIAL_CONCURRENCY,
                 object_key=self.object_key,
@@ -183,14 +172,14 @@ class CapacityChecker:
                 f"Warm-up completed: {warm_up_results['throughput_mbps']:.1f} Mbps"
             )
 
-            # Phase 2: Ramp-up to find optimal concurrency using sophisticated Ramp class
+            # Phase 2: Ramp-up to find optimal concurrency using Ramp class with shared worker pool
             logger.info("=== Phase 2: Ramp-up ===")
             logger.info(
                 f"Starting ramp: {INITIAL_CONCURRENCY} -> {MAX_CONCURRENCY}, step {RAMP_STEP_CONCURRENCY} every {RAMP_STEP_MINUTES}m"
             )
 
             ramp = Ramp(
-                storage_system=self.storage_system,
+                worker_pool=self.worker_pool,
                 initial_concurrency=INITIAL_CONCURRENCY,
                 ramp_step=RAMP_STEP_CONCURRENCY,
                 step_duration_seconds=RAMP_STEP_MINUTES * 60,
@@ -250,8 +239,9 @@ class CapacityChecker:
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise
         finally:
-            # Cleanup is handled by the individual classes
-            pass
+            # Cleanup shared worker pool
+            if self.worker_pool:
+                self.worker_pool.cleanup()
 
 
 def main():
