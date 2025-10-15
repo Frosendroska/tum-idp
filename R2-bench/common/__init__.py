@@ -2,7 +2,7 @@
 Common utilities for the R2 benchmark.
 """
 
-from .resizable_semaphore import ResizableSemaphore
 from .phase_manager import PhaseManager
+from .worker_pool import WorkerPool
 
-__all__ = ['ResizableSemaphore', 'PhaseManager']
+__all__ = ['PhaseManager', 'WorkerPool']
