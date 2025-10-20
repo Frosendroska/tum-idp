@@ -27,7 +27,7 @@ class PlateauCheck:
         logger.debug(f"Added measurement: {concurrency} conn -> {throughput_mbps:.1f} Mbps")
     
     def is_plateau_reached(self) -> tuple:
-        """Check if plateau is reached or system bandwidth limit is hit."""
+        """Check if plateau is reached, degradation detected, or system bandwidth limit is hit."""
         if len(self.measurements) < 1:
             return False, "Not enough measurements"
         
@@ -39,26 +39,42 @@ class PlateauCheck:
             if total_throughput >= self.system_bandwidth_mbps:
                 return True, f"System bandwidth limit reached: {total_throughput:.1f} Mbps >= {self.system_bandwidth_mbps} Mbps limit"
         
-        # Check for plateau (need at least 5 measurements)
-        if len(self.measurements) < 5:
+        # Find peak throughput so far
+        peak_throughput = max(m['throughput_mbps'] for m in self.measurements)
+        latest_throughput = self.measurements[-1]['throughput_mbps']
+        
+        # Check for significant degradation from peak (more robust than consecutive comparison)
+        if peak_throughput > 0:
+            degradation_from_peak = (peak_throughput - latest_throughput) / peak_throughput
+            if degradation_from_peak > 0.2:
+                return True, f"Significant degradation from peak: {degradation_from_peak:.1%} drop (peak: {peak_throughput:.1f} -> current: {latest_throughput:.1f} Mbps)"
+        
+        # Check for plateau (need at least 3 measurements)
+        if len(self.measurements) < 3:
             return False, "Not enough measurements for plateau detection"
         
-        # Get last 5 measurements
-        recent = self.measurements[-5:]
+        # Get last 3 measurements
+        recent = self.measurements[-3:]
         
-        # Calculate improvement between consecutive measurements
-        improvements = []
+        # Calculate improvement/degradation between consecutive measurements
+        changes = []
         for i in range(1, len(recent)):
             prev_throughput = recent[i-1]['throughput_mbps']
             curr_throughput = recent[i]['throughput_mbps']
             
             if prev_throughput > 0:
-                improvement = (curr_throughput - prev_throughput) / prev_throughput
-                improvements.append(improvement)
+                change = (curr_throughput - prev_throughput) / prev_throughput
+                changes.append(change)
         
         # Check if all improvements are below threshold
-        if improvements and all(abs(imp) < self.threshold for imp in improvements):
+        if changes and all(abs(change) < self.threshold for change in changes):
             return True, f"Throughput improvement below {self.threshold*100}% threshold"
+        
+        # Check for consecutive degradation (after improvements check)
+        # If all recent steps show degradation > 10%, stop
+        if changes and all(change < -0.1 for change in changes):
+            avg_degradation = sum(abs(change) for change in changes) / len(changes)
+            return True, f"Consistent degradation detected: {avg_degradation:.1%} average drop over last {len(changes)} steps"
         
         return False, "Throughput still improving"
     

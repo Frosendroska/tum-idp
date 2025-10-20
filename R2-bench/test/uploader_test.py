@@ -6,6 +6,7 @@ import sys
 import os
 import unittest
 from unittest.mock import Mock, patch, MagicMock
+from configuration import BYTES_PER_GB, RANGE_SIZE_MB, BYTES_PER_MB
 
 # Mock boto3 before any imports that might use it
 sys.modules['boto3'] = Mock()

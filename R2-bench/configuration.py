@@ -30,21 +30,21 @@ INITIAL_CONCURRENCY = 8
 
 RAMP_STEP_MINUTES = 5  
 RAMP_STEP_CONCURRENCY = 32  
-MAX_CONCURRENCY = 1280  
+MAX_CONCURRENCY = 800  # Reduced from 1280 - R2 connection limits  
 
 STEADY_STATE_HOURS = 3
 
 # Algorithm parameters
 PLATEAU_THRESHOLD = 0.02
 ERROR_RETRY_DELAY = 1
-PROGRESS_INTERVAL = 10  # Log progress every N requests
+PROGRESS_INTERVAL = 100  # Log progress every N requests
 
 # CLI defaults
 DEFAULT_OUTPUT_DIR = "results"
 DEFAULT_PLOTS_DIR = "plots"
 
 # Error handling and termination
-MAX_ERROR_RATE = 0.5  # 50% error rate threshold
+MAX_ERROR_RATE = 0.2  # 20% error rate threshold
 MIN_REQUESTS_FOR_ERROR_CHECK = 10  # Minimum requests before checking error rate
 MAX_CONSECUTIVE_ERRORS = 20  # Stop after this many consecutive errors
 MAX_RETRIES = 3
