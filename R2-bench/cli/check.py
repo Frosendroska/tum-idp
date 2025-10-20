@@ -22,14 +22,9 @@ from configuration import (
     AWS_REGION,
     R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY,
-    DEFAULT_OBJECT_KEY,
-    SYSTEM_BANDWIDTH_MBPS,
     MAX_CONCURRENCY,
-    MAX_ERROR_RATE,
-    MIN_REQUESTS_FOR_ERROR_CHECK,
-    MAX_CONSECUTIVE_ERRORS,
-    PROGRESS_INTERVAL,
-    MAX_RETRIES,
+    SECONDS_PER_MINUTE,
+    PLATEAU_THRESHOLD,
 )
 from systems.r2 import R2System
 from systems.aws import AWSSystem
@@ -51,24 +46,17 @@ class CapacityChecker:
 
     def __init__(
         self,
-        storage_type: str = "r2",
-        object_key: str = None,
-        worker_bandwidth_mbps: float = None,
+        storage_type: str,
+        object_key: str,
+        system_bandwidth_mbps: float,
     ):
         self.storage_type = storage_type.lower()
-        self.object_key = object_key or DEFAULT_OBJECT_KEY
-        self.system_bandwidth_mbps = (
-            worker_bandwidth_mbps
-            if worker_bandwidth_mbps is not None
-            else SYSTEM_BANDWIDTH_MBPS
-        )
+        self.object_key = object_key
+        self.system_bandwidth_mbps = system_bandwidth_mbps
         self.storage_system = None
 
         # Initialize components
         self.persistence = ParquetPersistence()
-        self.plateau_checker = PlateauCheck(
-            system_bandwidth_mbps=self.system_bandwidth_mbps
-        )
 
         # Shared worker pool for reuse across phases
         self.worker_pool = None
@@ -127,34 +115,12 @@ class CapacityChecker:
             logger.info(
                 "Attempting to create a smaller test object for more reliable testing..."
             )
-
-            # Try to create a smaller test object (1GB instead of 9GB)
-            try:
-                from cli.uploader import Uploader
-
-                uploader = Uploader(self.storage_type)
-                success = uploader.upload_test_object(
-                    size_gb=1, object_key="test-object-1gb"
-                )
-                if success:
-                    self.object_key = "test-object-1gb"
-                    logger.info(
-                        "Successfully created 1GB test object, using it for benchmarking"
-                    )
-                else:
-                    logger.error("Failed to create test object")
-                    raise
-            except Exception as upload_error:
-                logger.error(f"Failed to create test object: {upload_error}")
-                logger.error(
-                    "Please run 'python cli.py upload --storage r2' first to create the test object"
-                )
-                raise
+            return
 
         try:
             # Initialize shared worker pool
             self.worker_pool = WorkerPool(self.storage_system, MAX_CONCURRENCY)
-            
+
             # Phase 1: Warm-up using WarmUp class with shared worker pool
             logger.info("=== Phase 1: Concurrent Warm-up ===")
 
@@ -182,9 +148,10 @@ class CapacityChecker:
                 worker_pool=self.worker_pool,
                 initial_concurrency=INITIAL_CONCURRENCY,
                 ramp_step=RAMP_STEP_CONCURRENCY,
-                step_duration_seconds=RAMP_STEP_MINUTES * 60,
+                step_duration_seconds=RAMP_STEP_MINUTES * SECONDS_PER_MINUTE,
                 object_key=self.object_key,
-                worker_bandwidth_mbps=self.system_bandwidth_mbps,
+                plateau_threshold=PLATEAU_THRESHOLD,
+                system_bandwidth_mbps=self.system_bandwidth_mbps,
             )
 
             ramp_results = ramp.find_optimal_concurrency(
@@ -260,7 +227,7 @@ def main():
     checker = CapacityChecker(
         storage_type=args.storage,
         object_key=args.object_key,
-        worker_bandwidth_mbps=args.worker_bandwidth,
+        system_bandwidth_mbps=args.system_bandwidth_mbps,
     )
 
     try:
