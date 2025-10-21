@@ -7,7 +7,6 @@ import logging
 from typing import Dict, Any, Optional
 from configuration import (
     DEFAULT_OBJECT_KEY, 
-    PROGRESS_INTERVAL,
     SECONDS_PER_HOUR,
 )
 

@@ -7,10 +7,10 @@ import botocore
 from botocore.exceptions import ClientError
 from io import BytesIO
 import logging
-        import time
-        from urllib3.exceptions import IncompleteRead
-        from botocore.exceptions import ReadTimeoutError
-from configuration import RANGE_SIZE_MB, MAX_CONCURRENCY, CONNECTION_TIMEOUT, READ_TIMEOUT, MAX_CONNECTIONS_PER_HOST
+import time
+from urllib3.exceptions import IncompleteRead
+from botocore.exceptions import ReadTimeoutError
+from configuration import RANGE_SIZE_MB, MAX_CONCURRENCY
 
 logger = logging.getLogger(__name__)
 

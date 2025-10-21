@@ -119,7 +119,7 @@ class CapacityChecker:
 
         try:
             # Initialize shared worker pool
-            self.worker_pool = WorkerPool(self.storage_system, MAX_CONCURRENCY)
+            self.worker_pool = WorkerPool(self.storage_system, self.persistence, MAX_CONCURRENCY)
 
             # Phase 1: Warm-up using WarmUp class with shared worker pool
             logger.info("=== Phase 1: Concurrent Warm-up ===")

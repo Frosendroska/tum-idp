@@ -30,14 +30,14 @@ INITIAL_CONCURRENCY = 8
 
 RAMP_STEP_MINUTES = 5  
 RAMP_STEP_CONCURRENCY = 32  
-MAX_CONCURRENCY = 800  # Reduced from 1280 - R2 connection limits  
+MAX_CONCURRENCY = 400  # Reduced from 1280 - R2 connection limits  
 
 STEADY_STATE_HOURS = 3
 
 # Algorithm parameters
 PLATEAU_THRESHOLD = 0.02
 ERROR_RETRY_DELAY = 1
-PROGRESS_INTERVAL = 100  # Log progress every N requests
+PROGRESS_INTERVAL = 50  # Log progress every N requests
 
 # CLI defaults
 DEFAULT_OUTPUT_DIR = "results"

@@ -30,6 +30,7 @@ class ParquetPersistence:
         if not self.records:
             return None
         
+        logger.info(f"Saving {len(self.records)} records to file")
         # Convert records to DataFrame
         data = []
         for record in self.records:
