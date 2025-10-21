@@ -278,6 +278,16 @@ class WorkerPool:
         # Calculate latency statistics
         latencies = [r.latency_ms for r in phase_records if r.http_status == 200]
         avg_latency = sum(latencies) / len(latencies) if latencies else 0
+        
+        # Calculate percentile latencies
+        if latencies:
+            sorted_latencies = sorted(latencies)
+            n = len(sorted_latencies)
+            p50_latency = sorted_latencies[int(0.5 * n)] if n > 0 else 0
+            p95_latency = sorted_latencies[int(0.95 * n)] if n > 0 else 0
+            p99_latency = sorted_latencies[int(0.99 * n)] if n > 0 else 0
+        else:
+            p50_latency = p95_latency = p99_latency = 0
 
         # Calculate throughput (simplified - total bytes / time)
         total_bytes = sum(r.bytes for r in phase_records if r.http_status == 200)
@@ -302,7 +312,11 @@ class WorkerPool:
             "error_rate": error_rate,
             "throughput_mbps": throughput_mbps,
             "avg_latency_ms": avg_latency,
+            "p50_latency_ms": p50_latency,
+            "p95_latency_ms": p95_latency,
+            "p99_latency_ms": p99_latency,
             "total_bytes": total_bytes,
+            "duration_seconds": duration_seconds,
         }
 
     def stop_workers(self):
