@@ -8,7 +8,7 @@ import threading
 import random
 from typing import Dict, Any, List, Callable, Optional
 from persistence.base import BenchmarkRecord
-from persistence.metrics_aggregator import MetricsAggregator
+from persistence.parquet import ParquetPersistence
 from configuration import (
     RANGE_SIZE_MB,
     BYTES_PER_MB,
@@ -25,14 +25,18 @@ logger = logging.getLogger(__name__)
 class WorkerPool:
     """Shared worker pool that can be reused across benchmark phases."""
 
-    def __init__(self, storage_system, max_workers: int = 100):
+    def __init__(
+        self, storage_system, persistence: ParquetPersistence, max_workers: int = 100
+    ):
         """Initialize the worker pool.
 
         Args:
             storage_system: Storage system to use for downloads
+            persistence: Persistence object to store benchmark records
             max_workers: Maximum number of workers to create
         """
         self.storage_system = storage_system
+        self.persistence = persistence
         self.max_workers = max_workers
 
         # Worker management
@@ -43,9 +47,6 @@ class WorkerPool:
 
         # Phase management
         self.current_phase_id: str = ""
-
-        # Shared components
-        self.metrics_aggregator = MetricsAggregator()
 
         # Worker state
         self.worker_states = {}  # worker_id -> state dict
@@ -61,7 +62,6 @@ class WorkerPool:
             phase_id: Optional phase identifier to begin
         """
         self.current_phase_id = phase_id
-        self.metrics_aggregator.set_phase_step_time(phase_id, time.time())
         logger.info(f"Began phase: {phase_id}")
 
         if self.is_running:
@@ -149,7 +149,6 @@ class WorkerPool:
 
     def _worker_loop(self, worker_id: int):
         """Worker thread loop that processes requests."""
-        logger.info(f"Worker {worker_id} started")
 
         while not self.stop_event.is_set():
             try:
@@ -228,7 +227,7 @@ class WorkerPool:
                 )
 
                 # Record the request
-                self.metrics_aggregator.record_request(record)
+                self.persistence.store_record(record)
 
                 # Update worker state
                 worker_state["requests_completed"] += 1
@@ -262,11 +261,49 @@ class WorkerPool:
                     )
                     break
 
-        logger.info(f"Worker {worker_id} finished")
-
     def get_step_stats(self, phase_id: str) -> Optional[Dict[str, Any]]:
-        """Get statistics for a specific phase step."""
-        return self.metrics_aggregator.get_step_stats(phase_id)
+        """Get step statistics for a phase from persistence records."""
+        # Get all records for this phase from persistence
+        phase_records = [r for r in self.persistence.records if r.phase_id == phase_id]
+
+        if not phase_records:
+            return None
+
+        # Calculate basic statistics
+        total_requests = len(phase_records)
+        successful_requests = len([r for r in phase_records if r.http_status == 200])
+        error_requests = total_requests - successful_requests
+        error_rate = error_requests / total_requests if total_requests > 0 else 0
+
+        # Calculate latency statistics
+        latencies = [r.latency_ms for r in phase_records if r.http_status == 200]
+        avg_latency = sum(latencies) / len(latencies) if latencies else 0
+
+        # Calculate throughput (simplified - total bytes / time)
+        total_bytes = sum(r.bytes for r in phase_records if r.http_status == 200)
+        if phase_records:
+            duration_seconds = max(r.end_ts for r in phase_records) - min(
+                r.start_ts for r in phase_records
+            )
+            throughput_mbps = (
+                (total_bytes * 8) / (duration_seconds * 1_000_000)
+                if duration_seconds > 0
+                else 0
+            )
+        else:
+            throughput_mbps = 0
+
+        return {
+            "phase_id": phase_id,
+            "concurrency": phase_records[0].concurrency if phase_records else 0,
+            "total_requests": total_requests,
+            "successful_requests": successful_requests,
+            "error_requests": error_requests,
+            "error_rate": error_rate,
+            "throughput_mbps": throughput_mbps,
+            "avg_latency_ms": avg_latency,
+            "total_bytes": total_bytes,
+        }
 
     def stop_workers(self):
         """Stop all worker threads."""

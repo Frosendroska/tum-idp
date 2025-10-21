@@ -93,7 +93,7 @@ class BenchmarkRunner:
             self.persistence = ParquetPersistence()
 
             # Initialize shared worker pool
-            self.worker_pool = WorkerPool(self.storage_system, MAX_CONCURRENCY)
+            self.worker_pool = WorkerPool(self.storage_system, self.persistence, MAX_CONCURRENCY)
 
         except Exception as e:
             logger.error(f"Failed to initialize components: {e}")
