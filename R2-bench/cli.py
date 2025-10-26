@@ -14,8 +14,9 @@ from configuration import (
     DEFAULT_PLOTS_DIR, SYSTEM_BANDWIDTH_MBPS
 )
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Set up logging (only if not already configured)
+if not logging.root.handlers:
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 

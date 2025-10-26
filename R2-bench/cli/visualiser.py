@@ -74,6 +74,13 @@ class BenchmarkVisualizer:
             return None
         return self.throughput_plotter.create_throughput_vs_concurrency()
     
+    def create_throughput_stats_table(self):
+        """Create throughput statistics table by phase/step."""
+        if self.throughput_plotter is None:
+            logger.warning("Throughput plotter not available")
+            return None
+        return self.throughput_plotter.create_throughput_stats_table()
+    
     # Latency plot methods
     def create_latency_histogram(self):
         """Create comprehensive latency histogram plot with multiple views."""
@@ -148,6 +155,7 @@ class BenchmarkVisualizer:
             plots.append(self.create_throughput_timeline())
             plots.append(self.create_per_second_throughput_timeline())
             plots.append(self.create_throughput_vs_concurrency())
+            plots.append(self.create_throughput_stats_table())
         
         # Latency plots
         if self.latency_plotter is not None:

@@ -286,4 +286,101 @@ class ThroughputPlotter(BasePlotter):
         except Exception as e:
             logger.error(f"Failed to create throughput vs concurrency plot: {e}")
             return None
+    
+    def create_throughput_stats_table(self):
+        """Create throughput statistics table by phase/step."""
+        if self.data is None or len(self.data) == 0:
+            logger.warning("No data available for throughput stats table")
+            return None
+        
+        try:
+            successful_data = self.filter_successful_requests()
+            
+            if successful_data is None or len(successful_data) == 0:
+                logger.warning("No successful requests for throughput stats table")
+                return None
+            
+            # Group by phase and calculate metrics
+            phase_stats = successful_data.groupby('phase_id').agg({
+                'bytes': 'sum',
+                'ts': ['min', 'max', 'count'],
+                'latency_ms': 'mean',
+                'concurrency': 'mean'
+            }).reset_index()
+            
+            # Flatten column names
+            phase_stats.columns = ['phase_id', 'total_bytes', 'start_time', 'end_time', 
+                                  'request_count', 'avg_latency', 'avg_concurrency']
+            
+            # Calculate throughput for each phase
+            phase_stats['duration_seconds'] = phase_stats['end_time'] - phase_stats['start_time']
+            phase_stats['throughput_mbps'] = (phase_stats['total_bytes'] * 8) / (phase_stats['duration_seconds'] * 1_000_000)
+            phase_stats['requests_per_second'] = phase_stats['request_count'] / phase_stats['duration_seconds']
+            phase_stats['total_gb'] = phase_stats['total_bytes'] / (1024**3)
+            
+            # Create table data
+            table_data = []
+            headers = ['Phase', 'Duration (s)', 'Requests', 'Total Data (GB)', 
+                      'Throughput (Mbps)', 'Req/s', 'Avg Latency (ms)', 'Avg Concurrency']
+            
+            for _, row in phase_stats.iterrows():
+                table_row = [
+                    str(row['phase_id']),
+                    f"{row['duration_seconds']:.1f}",
+                    str(int(row['request_count'])),
+                    f"{row['total_gb']:.3f}",
+                    f"{row['throughput_mbps']:.2f}",
+                    f"{row['requests_per_second']:.2f}",
+                    f"{row['avg_latency']:.1f}",
+                    f"{row['avg_concurrency']:.0f}"
+                ]
+                table_data.append(table_row)
+            
+            # Add overall summary row
+            total_bytes = successful_data['bytes'].sum()
+            total_duration = successful_data['ts'].max() - successful_data['ts'].min()
+            total_requests = len(successful_data)
+            overall_throughput = (total_bytes * 8) / (total_duration * 1_000_000) if total_duration > 0 else 0
+            overall_rps = total_requests / total_duration if total_duration > 0 else 0
+            overall_latency = successful_data['latency_ms'].mean()
+            overall_concurrency = successful_data['concurrency'].mean()
+            
+            summary_row = [
+                'ALL',
+                f"{total_duration:.1f}",
+                str(total_requests),
+                f"{total_bytes / (1024**3):.3f}",
+                f"{overall_throughput:.2f}",
+                f"{overall_rps:.2f}",
+                f"{overall_latency:.1f}",
+                f"{overall_concurrency:.0f}"
+            ]
+            table_data.append(summary_row)
+            
+            # Create table file
+            output_file = os.path.join(self.output_dir, 'throughput_stats_table.txt')
+            with open(output_file, 'w') as f:
+                f.write("Throughput Statistics by Phase/Step\n")
+                f.write("=" * 100 + "\n\n")
+                
+                # Write headers
+                f.write(f"{'Phase':<12} {'Duration':<12} {'Requests':<12} {'Data (GB)':<12} "
+                       f"{'Throughput':<15} {'Req/s':<10} {'Latency (ms)':<15} {'Concurrency':<12}\n")
+                f.write("-" * 100 + "\n")
+                
+                # Write data rows
+                for row in table_data:
+                    f.write(f"{row[0]:<12} {row[1]:<12} {row[2]:<12} {row[3]:<12} "
+                           f"{row[4]:<15} {row[5]:<10} {row[6]:<15} {row[7]:<12}\n")
+                
+                f.write("\n")
+                f.write(f"Total Requests: {len(successful_data):,}\n")
+                f.write(f"Success Rate: {len(successful_data) / len(self.data) * 100:.2f}%\n")
+            
+            logger.info(f"Created throughput stats table: {output_file}")
+            return output_file
+            
+        except Exception as e:
+            logger.error(f"Failed to create throughput stats table: {e}")
+            return None
 

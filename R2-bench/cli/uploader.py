@@ -28,10 +28,11 @@ from configuration import (
 from systems.r2 import R2System
 from systems.aws import AWSSystem
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# Set up logging (only if not already configured)
+if not logging.root.handlers:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
 logger = logging.getLogger(__name__)
 
 

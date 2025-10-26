@@ -34,10 +34,11 @@ from algorithms.warm_up import WarmUp
 from algorithms.ramp import Ramp
 from common.worker_pool import WorkerPool
 
-# Set up logging
-logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# Set up logging (only if not already configured)
+if not logging.root.handlers:
+    logging.basicConfig(
+        level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
 logger = logging.getLogger(__name__)
 
 

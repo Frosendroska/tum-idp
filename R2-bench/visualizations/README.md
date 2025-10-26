@@ -34,6 +34,7 @@ The visualization system has been refactored for better modularity and maintaina
   - `create_throughput_timeline()`: Timeline of throughput over time
   - `create_per_second_throughput_timeline()`: Per-second throughput using sweep line algorithm
   - `create_throughput_vs_concurrency()`: Throughput analysis by concurrency level
+  - `create_throughput_stats_table()`: Text table with throughput statistics per phase/step
 
 #### 2. Latency Plots (`latency_plots.py`)
 - `LatencyPlotter`: Handles all latency-related visualizations
