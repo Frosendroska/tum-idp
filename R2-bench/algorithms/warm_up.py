@@ -5,7 +5,12 @@ Concurrent warm-up algorithm for the R2 benchmark with sophisticated architectur
 import time
 import logging
 from typing import Dict, Any
-from configuration import DEFAULT_OBJECT_KEY, INITIAL_CONCURRENCY, SECONDS_PER_MINUTE
+from configuration import (
+    DEFAULT_OBJECT_KEY,
+    INITIAL_CONCURRENCY,
+    SECONDS_PER_MINUTE,
+    PROGRESS_INTERVAL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +50,16 @@ class WarmUp:
 
         # Wait for the warm-up duration
         while time.time() < end_time:
-            time.sleep(0.1)
+            current_time = time.time()
+            elapsed = current_time - start_time
+            remaining = end_time - current_time
+
+            if int(elapsed) % PROGRESS_INTERVAL == 0 and int(elapsed) > 0:
+                logger.info(
+                    f"Step progress: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining"
+                )
+
+            time.sleep(1)
 
         # Get step statistics
         step_stats = self.worker_pool.get_step_stats("warmup")

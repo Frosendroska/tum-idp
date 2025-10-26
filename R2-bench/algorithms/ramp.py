@@ -16,6 +16,7 @@ from configuration import (
     MAX_CONSECUTIVE_ERRORS,
     MAX_RETRIES,
     MAX_CONCURRENCY,
+    PROGRESS_INTERVAL,
 )
 from algorithms.plateau_check import PlateauCheck
 from common.worker_pool import WorkerPool
@@ -64,10 +65,19 @@ class Ramp:
 
         start_time = time.time()
         end_time = start_time + self.step_duration_seconds
-        
-        # Wait for the step duration
+
+        # Wait for the step duration with simple progress logging
         while time.time() < end_time:
-            time.sleep(0.1)
+            current_time = time.time()
+            elapsed = current_time - start_time
+            remaining = end_time - current_time
+
+            if int(elapsed) % PROGRESS_INTERVAL == 0 and int(elapsed) > 0:
+                logger.info(
+                    f"Step progress: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining"
+                )
+
+            time.sleep(1)
 
         # Get step statistics
         step_stats = self.worker_pool.get_step_stats(step_id)

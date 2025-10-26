@@ -1,4 +1,4 @@
-## Benchmarking
+# Benchmarking
 
 Although Cloudflare R2 is often more cost-effective than Amazon S3, cost alone shouldn’t drive our migration decision. We must confirm that R2 delivers performance on par with S3 so that the price gap isn’t the result of higher latency or lower throughput.
 
@@ -74,11 +74,20 @@ The low throughput is expected—it’s just a basic proof of concept. On top of
 However, we now have an impression of the latency distribution and can build a more reliable microbenchmark. 
 
 
+## Our benchmark solution
+
 ### Throughput banchmarks
 
 Our next step is to run more comprehensive experiments from EC2, where we’ll store data in R2 and fetch it from the EC2 instance to test both microbenchmarking and throughput limits. The implementation and the design document are in `R2-bench/` folder.
 
+The design document of this benchmarking is in (README.md)[R2-bench/README.md].
+
 #### Results
+
+- r5.xlarge       --   32 GiB	  4 vCPUs	  EBS only	 Up to 25 Gigabit	 $0.298 hourly
+- c5n.9xlarge     --   96 GiB	  36 vCPUs	EBS only	 50 Gigabit	       $1.944 hourly
+- c7gn.8xlarge    --   64 GiB   32 vCPUs	EBS only	 100 Gigabit	     $1.9968 hourly
+- hpc7g.16xlarge	--   128 GiB	64 vCPUs	EBS only	 200 Gigabit	     $1.6832 hourly
 
 
 

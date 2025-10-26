@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import logging
 from datetime import datetime
-from persistence.base import BenchmarkRecord
+from persistence.record import BenchmarkRecord
 
 logger = logging.getLogger(__name__)
 

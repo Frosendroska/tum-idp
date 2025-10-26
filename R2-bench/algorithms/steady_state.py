@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 from configuration import (
     DEFAULT_OBJECT_KEY, 
     SECONDS_PER_HOUR,
+    PROGRESS_INTERVAL,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,7 +47,16 @@ class SteadyState:
 
         # Wait for the steady state duration
         while time.time() < end_time:
-            time.sleep(0.1)
+            current_time = time.time()
+            elapsed = current_time - start_time
+            remaining = end_time - current_time
+
+            if int(elapsed) % PROGRESS_INTERVAL == 0 and int(elapsed) > 0:
+                logger.info(
+                    f"Step progress: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining"
+                )
+
+            time.sleep(1)
         
         # Get step statistics
         step_stats = self.worker_pool.get_step_stats("steady_state")
