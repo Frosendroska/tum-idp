@@ -7,7 +7,7 @@ import logging
 import threading
 import random
 from typing import Dict, Any, List, Callable, Optional
-from persistence.base import BenchmarkRecord
+from persistence.record import BenchmarkRecord
 from persistence.parquet import ParquetPersistence
 from configuration import (
     RANGE_SIZE_MB,

@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from configuration import OBJECT_SIZE_GB, RANGE_SIZE_MB
-from persistence.base import BenchmarkRecord, SimpleMetricsCollector
+from persistence.record import BenchmarkRecord, SimpleMetricsCollector
 
 
 class TestBenchmarkComponents(unittest.TestCase):
