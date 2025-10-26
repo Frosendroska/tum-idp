@@ -84,10 +84,49 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
 
 #### Results
 
-- r5.xlarge       --   32 GiB	  4 vCPUs	  EBS only	 Up to 25 Gigabit	 $0.298 hourly
-- c5n.9xlarge     --   96 GiB	  36 vCPUs	EBS only	 50 Gigabit	       $1.944 hourly
-- c7gn.8xlarge    --   64 GiB   32 vCPUs	EBS only	 100 Gigabit	     $1.9968 hourly
-- hpc7g.16xlarge	--   128 GiB	64 vCPUs	EBS only	 200 Gigabit	     $1.6832 hourly
+- r5.xlarge (32 GiB, 4 vCPUs, EBS only, Up to 25 Gigabit, $0.298 hourly)
+  - The results are in the [r5.xlarge](../plots/r5.xlarge/) folder.
+    Summary:
+    ```
+    Total Records: 10,067
+    Successful Requests: 10,067
+    Success Rate: 100.00%
+
+    Duration: 0.52 hours
+    Total Data: 983.11 GB
+    Average Throughput: 4532.2 Mbps
+
+    Latency Statistics (ms):
+    Average: 14806.8
+    P50: 10931.4
+    P95: 22053.1
+    P99: 135819.5
+    ```
+    ![](../plots/r5.xlarge/throughput_timeline.png)
+
+- c5n.9xlarge (96 GiB, 36 vCPUs, EBS only, 50 Gigabit, $1.944 hourly)
+  - The results are in the [c5n.9xlarge](../plots/c5n.9xlarge/) folder.
+    Summary:
+    ```
+
+    ```
+    ![](../plots/c5n.9xlarge/throughput_timeline.png)
+
+- c7gn.8xlarge (4 GiB, 32 vCPUs, EBS only, 100 Gigabit, $1.9968 hourly)
+  - The results are in the [c7gn.8xlarge](../plots/c7gn.8xlarge/) folder.
+    Summary:
+    ```
+
+    ```
+    ![](../plots/c7gn.8xlarge/throughput_timeline.png)
+
+- hpc7g.16xlarge (128 GiB,	64 vCPUs, EBS only, 200 Gigabit, $1.6832 hourly)
+  - The results are in the [hpc7g.16xlarge](../plots/hpc7g.16xlarge/) folder.
+    Summary:
+    ```
+
+    ```
+    ![](../plots/hpc7g.16xlarge/throughput_timeline.png)
 
 
 

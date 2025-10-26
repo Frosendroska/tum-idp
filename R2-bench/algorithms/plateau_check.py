@@ -3,7 +3,7 @@ Simple plateau check algorithm for the R2 benchmark.
 """
 
 import logging
-from configuration import PLATEAU_THRESHOLD
+from configuration import PLATEAU_THRESHOLD, PEAK_DEGRADATION_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class PlateauCheck:
         # Check for significant degradation from peak (more robust than consecutive comparison)
         if peak_throughput > 0:
             degradation_from_peak = (peak_throughput - latest_throughput) / peak_throughput
-            if degradation_from_peak > 0.2:
+            if degradation_from_peak > PEAK_DEGRADATION_THRESHOLD:
                 return True, f"Significant degradation from peak: {degradation_from_peak:.1%} drop (peak: {peak_throughput:.1f} -> current: {latest_throughput:.1f} Mbps)"
         
         # Check for plateau (need at least 3 measurements)
@@ -66,15 +66,9 @@ class PlateauCheck:
                 change = (curr_throughput - prev_throughput) / prev_throughput
                 changes.append(change)
         
-        # Check if all improvements are below threshold
+        # Check if throughput has plateaued (minimal changes)
         if changes and all(abs(change) < self.threshold for change in changes):
             return True, f"Throughput improvement below {self.threshold*100}% threshold"
-        
-        # Check for consecutive degradation (after improvements check)
-        # If all recent steps show degradation > 10%, stop
-        if changes and all(change < -0.1 for change in changes):
-            avg_degradation = sum(abs(change) for change in changes) / len(changes)
-            return True, f"Consistent degradation detected: {avg_degradation:.1%} average drop over last {len(changes)} steps"
         
         return False, "Throughput still improving"
     
