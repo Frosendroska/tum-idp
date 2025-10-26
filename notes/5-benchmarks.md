@@ -88,29 +88,33 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
   - The results are in the [r5.xlarge](../plots/r5.xlarge/) folder.
     Summary:
     ```
-    Total Records: 10,067
-    Successful Requests: 10,067
-    Success Rate: 100.00%
-
-    Duration: 0.52 hours
-    Total Data: 983.11 GB
-    Average Throughput: 4532.2 Mbps
-
-    Latency Statistics (ms):
-    Average: 14806.8
-    P50: 10931.4
-    P95: 22053.1
-    P99: 135819.5
+    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    ----------------------------------------------------------------------------------------------------
+    warmup       60.5         295          28.809       4090.18         4.88       1645.0          8 
+    ramp_1       304.8        1523         148.730      4191.81         5.00       1582.6          8           
+    ramp_2       307.0        1824         178.125      4984.63         5.94       6690.5          41          
+    ramp_3       306.1        1858         181.445      5092.04         6.07       11839.5         73          
+    ramp_4       307.5        1819         177.637      4962.95         5.92       17497.7         106         
+    ramp_5       307.2        1786         174.414      4876.83         5.81       23258.3         138         
+    ramp_6       271.7        613          59.863       1892.40         2.26       60014.9         168                   
+    ALL          1860.9       9718         949.023      4380.73         5.22       15152.7         79   
     ```
-    ![](../plots/r5.xlarge/throughput_timeline.png)
+    ![](../plots/r5.xlarge/per_second_throughput_timeline.png)
 
 - c5n.9xlarge (96 GiB, 36 vCPUs, EBS only, 50 Gigabit, $1.944 hourly)
   - The results are in the [c5n.9xlarge](../plots/c5n.9xlarge/) folder.
     Summary:
     ```
-
+    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    ----------------------------------------------------------------------------------------------------
+    warmup       60.7         338          33.008       4673.78         5.57       1438.0          8           
+    ramp_1       303.0        1370         133.789      3792.27         4.52       1755.0          8           
+    ramp_2       303.3        3557         347.363      9839.12         11.73      3399.2          40          
+    ramp_3       303.9        3548         346.484      9794.84         11.68      6148.1          73          
+    ramp_4       292.8        3390         331.055      9711.35         11.58      8992.2          104         
+    ALL          1261.9       12203        1191.699     8112.24         9.67       5513.3          63      
     ```
-    ![](../plots/c5n.9xlarge/throughput_timeline.png)
+    ![](../plots/c5n.9xlarge/per_second_throughput_timeline.png)
 
 - c7gn.8xlarge (4 GiB, 32 vCPUs, EBS only, 100 Gigabit, $1.9968 hourly)
   - The results are in the [c7gn.8xlarge](../plots/c7gn.8xlarge/) folder.
@@ -118,7 +122,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ```
 
     ```
-    ![](../plots/c7gn.8xlarge/throughput_timeline.png)
+    ![](../plots/c7gn.8xlarge/per_second_throughput_timeline.png)
 
 - hpc7g.16xlarge (128 GiB,	64 vCPUs, EBS only, 200 Gigabit, $1.6832 hourly)
   - The results are in the [hpc7g.16xlarge](../plots/hpc7g.16xlarge/) folder.
@@ -126,7 +130,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ```
 
     ```
-    ![](../plots/hpc7g.16xlarge/throughput_timeline.png)
+    ![](../plots/hpc7g.16xlarge/per_second_throughput_timeline.png)
 
 
 

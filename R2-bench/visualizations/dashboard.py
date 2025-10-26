@@ -52,7 +52,7 @@ class DashboardPlotter(BasePlotter):
 R2 Benchmark Summary Report
 ===========================
 
-Data Source: Parquet File
+Data Source: {self.data_source}
 Total Records: {total_requests:,}
 Successful Requests: {successful_requests:,}
 Success Rate: {success_rate:.2%}
