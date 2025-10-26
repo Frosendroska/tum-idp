@@ -323,6 +323,25 @@ class ThroughputPlotter(BasePlotter):
             headers = ['Phase', 'Duration (s)', 'Requests', 'Total Data (GB)', 
                       'Throughput (Mbps)', 'Req/s', 'Avg Latency (ms)', 'Avg Concurrency']
             
+            # Define sort key function to ensure warmup comes first, then ramp steps in order, then ALL
+            def phase_sort_key(phase_id):
+                if phase_id == 'warmup':
+                    return (0, 0)  # warmup comes first
+                elif phase_id == 'ALL':
+                    return (2, 999)  # ALL comes last
+                elif phase_id.startswith('ramp_'):
+                    try:
+                        num = int(phase_id.split('_')[1])
+                        return (1, num)  # ramp steps after warmup
+                    except (IndexError, ValueError):
+                        return (1, 999)  # invalid ramp ID
+                else:
+                    return (3, 999)  # everything else
+            
+            # Sort the phase_stats DataFrame by phase_id using the custom sort key
+            phase_stats['sort_key'] = phase_stats['phase_id'].apply(phase_sort_key)
+            phase_stats = phase_stats.sort_values('sort_key')
+            
             for _, row in phase_stats.iterrows():
                 table_row = [
                     str(row['phase_id']),
