@@ -84,20 +84,20 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
 
 #### Results
 
+**For 100 MB chunks:**
+
 - r5.xlarge (32 GiB, 4 vCPUs, EBS only, Up to 25 Gigabit, $0.298 hourly)
   - The results are in the [r5.xlarge](../plots/r5.xlarge/) folder.
     Summary:
     ```
     Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
     ----------------------------------------------------------------------------------------------------
-    warmup       60.5         295          28.809       4090.18         4.88       1645.0          8 
-    ramp_1       304.8        1523         148.730      4191.81         5.00       1582.6          8           
-    ramp_2       307.0        1824         178.125      4984.63         5.94       6690.5          41          
-    ramp_3       306.1        1858         181.445      5092.04         6.07       11839.5         73          
-    ramp_4       307.5        1819         177.637      4962.95         5.92       17497.7         106         
-    ramp_5       307.2        1786         174.414      4876.83         5.81       23258.3         138         
-    ramp_6       271.7        613          59.863       1892.40         2.26       60014.9         168                   
-    ALL          1860.9       9718         949.023      4380.73         5.22       15152.7         79   
+    warmup       60.3         310          30.273       4315.13         5.14       1567.3          8           
+    ramp_1       304.1        1604         156.641      4424.23         5.27       1503.5          8           
+    ramp_2       305.5        2015         196.777      5532.15         6.59       6044.0          41          
+    ramp_3       307.2        2111         206.152      5764.01         6.87       10429.6         73          
+    ramp_4       285.4        1964         191.797      5772.15         6.88       15095.9         104         
+    ALL          1261.4       8004         781.641      5322.92         6.35       8338.5          57            
     ```
     ![](../plots/r5.xlarge/per_second_throughput_timeline.png)
 
