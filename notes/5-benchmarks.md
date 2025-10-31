@@ -116,13 +116,20 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ```
     ![](../plots/c5n.9xlarge/per_second_throughput_timeline.png)
 
-- c7gn.8xlarge (4 GiB, 32 vCPUs, EBS only, 100 Gigabit, $1.9968 hourly)
-  - The results are in the [c7gn.8xlarge](../plots/c7gn.8xlarge/) folder.
+- c6in.16xlarge (128 GiB, 32 vCPUs, EBS only, 100 Gigabit, $3.6288 hourly)
+  - The results are in the [c6in.16xlarge](../plots/c6in.16xlarge/) folder.
     Summary:
     ```
-
+    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    ----------------------------------------------------------------------------------------------------
+    warmup       59.5         369          36.035       5198.37         6.20       1304.4          8           
+    ramp_1       301.0        1812         176.953      5049.59         6.02       1324.9          8           
+    ramp_2       302.6        5320         519.531      14747.04        17.58      2270.0          40          
+    ramp_3       303.2        5168         504.688      14298.46        17.05      4210.0          72          
+    ramp_4       295.3        5390         526.367      15313.51        18.26      5701.6          104         
+    ALL          1261.5       18059        1763.574     12008.27        14.31      3734.8          65    
     ```
-    ![](../plots/c7gn.8xlarge/per_second_throughput_timeline.png)
+    ![](../plots/c6in.16xlarge/per_second_throughput_timeline.png)
 
 - hpc7g.16xlarge (128 GiB,	64 vCPUs, EBS only, 200 Gigabit, $1.6832 hourly)
   - The results are in the [hpc7g.16xlarge](../plots/hpc7g.16xlarge/) folder.
