@@ -131,11 +131,18 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ```
     ![](../plots/c6in.16xlarge/per_second_throughput_timeline.png)
 
-- hpc7g.16xlarge (128 GiB,	64 vCPUs, EBS only, 200 Gigabit, $1.6832 hourly)
+- hpc7a.12xlarge (128 GiB,	64 vCPUs, EBS only, 300 Gigabit, $8.8292 hourly)
   - The results are in the [hpc7g.16xlarge](../plots/hpc7g.16xlarge/) folder.
     Summary:
     ```
-
+    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    ----------------------------------------------------------------------------------------------------
+    warmup       60.6         326          31.836       4514.45         5.38       1488.8          8           
+    ramp_1       302.2        1632         159.375      4530.14         5.40       1474.3          8           
+    ramp_2       304.6        2798         273.242      7705.03         9.19       4331.9          40          
+    ramp_3       305.4        2694         263.086      7400.75         8.82       8137.0          73          
+    ramp_4       289.7        2528         246.875      7319.00         8.72       11927.1         104         
+    ALL          1261.9       9978         974.414      6632.83         7.91       6723.3          59     
     ```
     ![](../plots/hpc7g.16xlarge/per_second_throughput_timeline.png)
 
