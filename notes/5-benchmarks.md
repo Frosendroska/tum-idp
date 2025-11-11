@@ -99,7 +99,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ramp_4       285.4        1964         191.797      5772.15         6.88       15095.9         104         
     ALL          1261.4       8004         781.641      5322.92         6.35       8338.5          57            
     ```
-    ![](../plots/r5.xlarge/per_second_throughput_timeline.png)
+    ![pic](../plots/r5.xlarge/per_second_throughput_timeline.png)
 
 - c5n.9xlarge (96 GiB, 36 vCPUs, EBS only, 50 Gigabit, $1.944 hourly)
   - The results are in the [c5n.9xlarge](../plots/c5n.9xlarge/) folder.
@@ -114,7 +114,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ramp_4       292.8        3390         331.055      9711.35         11.58      8992.2          104         
     ALL          1261.9       12203        1191.699     8112.24         9.67       5513.3          63      
     ```
-    ![](../plots/c5n.9xlarge/per_second_throughput_timeline.png)
+    ![pic](../plots/c5n.9xlarge/per_second_throughput_timeline.png)
 
 - c6in.16xlarge (128 GiB, 32 vCPUs, EBS only, 100 Gigabit, $3.6288 hourly)
   - The results are in the [c6in.16xlarge](../plots/c6in.16xlarge/) folder.
@@ -129,7 +129,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ramp_4       295.3        5390         526.367      15313.51        18.26      5701.6          104         
     ALL          1261.5       18059        1763.574     12008.27        14.31      3734.8          65    
     ```
-    ![](../plots/c6in.16xlarge/per_second_throughput_timeline.png)
+    ![pic](../plots/c6in.16xlarge/per_second_throughput_timeline.png)
 
 - hpc7a.12xlarge (128 GiB,	64 vCPUs, EBS only, 300 Gigabit, $8.8292 hourly)
   - The results are in the [hpc7g.16xlarge](../plots/hpc7g.16xlarge/) folder.
@@ -144,7 +144,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ramp_4       289.7        2528         246.875      7319.00         8.72       11927.1         104         
     ALL          1261.9       9978         974.414      6632.83         7.91       6723.3          59     
     ```
-    ![](../plots/hpc7g.16xlarge/per_second_throughput_timeline.png)
+    ![pic](../plots/hpc7g.16xlarge/per_second_throughput_timeline.png)
 
 
 
