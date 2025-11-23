@@ -87,7 +87,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
 **For 100 MB chunks:**
 
 - r5.xlarge (32 GiB, 4 vCPUs, EBS only, Up to 25 Gigabit, $0.298 hourly)
-  - The results are in the [r5.xlarge](../plots/r5.xlarge/) folder.
+  - The results are in the [r5.xlarge](../r2-plots/r5.xlarge/) folder.
     Summary:
     ```
     Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
@@ -102,7 +102,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ![](../R2-bench/r2-plots/r5.xlarge/per_second_throughput_timeline.png)
 
 - c5n.9xlarge (96 GiB, 36 vCPUs, EBS only, 50 Gigabit, $1.944 hourly)
-  - The results are in the [c5n.9xlarge](../plots/c5n.9xlarge/) folder.
+  - The results are in the [c5n.9xlarge](../r2-plots/c5n.9xlarge/) folder.
     Summary:
     ```
     Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
@@ -117,7 +117,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ![pic](../R2-bench/r2-plots/c5n.9xlarge/per_second_throughput_timeline.png)
 
 - c6in.16xlarge (128 GiB, 32 vCPUs, EBS only, 100 Gigabit, $3.6288 hourly)
-  - The results are in the [c6in.16xlarge](../plots/c6in.16xlarge/) folder.
+  - The results are in the [c6in.16xlarge](../r2-plots/c6in.16xlarge/) folder.
     Summary:
     ```
     Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
@@ -132,7 +132,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ![pic](../R2-bench/r2-plots/c6in.16xlarge/per_second_throughput_timeline.png)
 
 - hpc7a.12xlarge (128 GiB,	64 vCPUs, EBS only, 300 Gigabit, $8.8292 hourly)
-  - The results are in the [hpc7g.16xlarge](../plots/hpc7g.16xlarge/) folder.
+  - The results are in the [hpc7g.16xlarge](../r2-plots/hpc7g.16xlarge/) folder.
     Summary:
     ```
     Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
@@ -144,7 +144,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ramp_4       289.7        2528         246.875      7319.00         8.72       11927.1         104         
     ALL          1261.9       9978         974.414      6632.83         7.91       6723.3          59     
     ```
-    ![pic](../R2-bench/r2-plots/hpc7g.16xlarge/per_second_throughput_timeline.png)
+    ![pic](../r2-bench/r2-plots/hpc7g.16xlarge/per_second_throughput_timeline.png)
 
 #### Results S3
 
@@ -162,6 +162,21 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ALL          1261.8       12471        1217.871     8290.59         9.88       5386.5          58          
     ```
     ![pic](../R2-bench/s3-plots/c5n.9xlarge/per_second_throughput_timeline.png)
+
+- c6in.16xlarge (128 GiB, 32 vCPUs, EBS only, 100 Gigabit, $3.6288 hourly)
+  - The results are in the [c6in.16xlarge](../s3-plots/c6in.16xlarge/) folder.
+    Summary:
+    ```
+    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    ----------------------------------------------------------------------------------------------------
+    warmup       60.0         439          42.871       6139.58         7.32       1105.5          8           
+    ramp_1       300.7        2174         212.305      6065.04         7.23       1101.6          8           
+    ramp_2       302.7        5568         543.750      15429.58        18.39      2167.3          40          
+    ramp_3       303.0        5052         493.359      13988.34        16.68      4306.2          72          
+    ramp_4       295.6        4657         454.785      13216.54        15.76      6593.0          104         
+    ALL          1261.7       17890        1747.070     11894.04        14.18      3767.8          61           
+    ```
+    ![pic](../R2-bench/s3-plots/c6in.16xlarge/per_second_throughput_timeline.png)
 
 
 
