@@ -82,7 +82,7 @@ Our next step is to run more comprehensive experiments from EC2, where we’ll s
 
 The design document of this benchmarking is in (README.md)[R2-bench/README.md].
 
-#### Results
+#### Results R2
 
 **For 100 MB chunks:**
 
@@ -99,7 +99,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ramp_4       285.4        1964         191.797      5772.15         6.88       15095.9         104         
     ALL          1261.4       8004         781.641      5322.92         6.35       8338.5          57            
     ```
-    ![](../R2-bench/plots/r5.xlarge/per_second_throughput_timeline.png)
+    ![](../R2-bench/r2-plots/r5.xlarge/per_second_throughput_timeline.png)
 
 - c5n.9xlarge (96 GiB, 36 vCPUs, EBS only, 50 Gigabit, $1.944 hourly)
   - The results are in the [c5n.9xlarge](../plots/c5n.9xlarge/) folder.
@@ -114,7 +114,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ramp_4       292.8        3390         331.055      9711.35         11.58      8992.2          104         
     ALL          1261.9       12203        1191.699     8112.24         9.67       5513.3          63      
     ```
-    ![pic](../R2-bench/plots/c5n.9xlarge/per_second_throughput_timeline.png)
+    ![pic](../R2-bench/r2-plots/c5n.9xlarge/per_second_throughput_timeline.png)
 
 - c6in.16xlarge (128 GiB, 32 vCPUs, EBS only, 100 Gigabit, $3.6288 hourly)
   - The results are in the [c6in.16xlarge](../plots/c6in.16xlarge/) folder.
@@ -129,7 +129,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ramp_4       295.3        5390         526.367      15313.51        18.26      5701.6          104         
     ALL          1261.5       18059        1763.574     12008.27        14.31      3734.8          65    
     ```
-    ![pic](../R2-bench/plots/c6in.16xlarge/per_second_throughput_timeline.png)
+    ![pic](../R2-bench/r2-plots/c6in.16xlarge/per_second_throughput_timeline.png)
 
 - hpc7a.12xlarge (128 GiB,	64 vCPUs, EBS only, 300 Gigabit, $8.8292 hourly)
   - The results are in the [hpc7g.16xlarge](../plots/hpc7g.16xlarge/) folder.
@@ -144,7 +144,24 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ramp_4       289.7        2528         246.875      7319.00         8.72       11927.1         104         
     ALL          1261.9       9978         974.414      6632.83         7.91       6723.3          59     
     ```
-    ![pic](../R2-bench/plots/hpc7g.16xlarge/per_second_throughput_timeline.png)
+    ![pic](../R2-bench/r2-plots/hpc7g.16xlarge/per_second_throughput_timeline.png)
+
+#### Results S3
+
+- c5n.9xlarge (96 GiB, 36 vCPUs, EBS only, 50 Gigabit, $1.944 hourly)
+  - The results are in the [c5n.9xlarge](../s3-plots/c5n.9xlarge/) folder.
+    Summary:
+    ```
+    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    ----------------------------------------------------------------------------------------------------
+    warmup       60.1         430          41.992       6006.57         7.16       1125.1          8           
+    ramp_1       302.0        2133         208.301      5925.49         7.06       1124.7          8           
+    ramp_2       303.1        3552         346.875      9830.11         11.72      3402.4          40          
+    ramp_3       310.3        3313         323.535      8955.12         10.68      6611.1          73          
+    ramp_4       293.2        3043         297.168      8706.59         10.38      9958.9          104         
+    ALL          1261.8       12471        1217.871     8290.59         9.88       5386.5          58          
+    ```
+    ![pic](../R2-bench/s3-plots/c5n.9xlarge/per_second_throughput_timeline.png)
 
 
 
