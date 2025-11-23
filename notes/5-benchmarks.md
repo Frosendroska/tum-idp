@@ -148,6 +148,20 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
 
 #### Results S3
 
+- r5.xlarge (32 GiB, 4 vCPUs, EBS only, Up to 25 Gigabit, $0.298 hourly)
+  - The results are in the [r5.xlarge](../s3-plots/r5.xlarge/) folder.
+    Summary:
+    ```
+    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    ----------------------------------------------------------------------------------------------------
+    warmup       60.0         389          37.988       5437.52         6.48       1237.9          8           
+    ramp_1       307.1        1730         168.945      4725.47         5.63       1395.7          8           
+    ramp_2       310.2        2089         204.004      5648.38         6.73       5832.4          41          
+    ramp_3       292.5        2073         202.441      5945.38         7.09       10144.4         72          
+    ALL          961.4        6281         613.379      5480.57         6.53       5749.0          40          
+    ```
+    ![](../R2-bench/s3-plots/r5.xlarge/per_second_throughput_timeline.png)
+
 - c5n.9xlarge (96 GiB, 36 vCPUs, EBS only, 50 Gigabit, $1.944 hourly)
   - The results are in the [c5n.9xlarge](../s3-plots/c5n.9xlarge/) folder.
     Summary:
