@@ -35,7 +35,6 @@ class ParquetPersistence:
         data = []
         for record in self.records:
             data.append({
-                'ts': record.ts,
                 'thread_id': record.thread_id,
                 'conn_id': record.conn_id,
                 'object_key': record.object_key,

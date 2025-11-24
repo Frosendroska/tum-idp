@@ -314,9 +314,9 @@ Std: {successful_data['latency_ms'].std():.1f} ms"""
                 logger.warning("No successful requests for latency over time plot")
                 return None
             
-            # Convert timestamp to datetime
+            # Convert timestamp to datetime using start_ts (when request actually started)
             successful_data = successful_data.copy()
-            successful_data['datetime'] = pd.to_datetime(successful_data['ts'], unit='s')
+            successful_data['datetime'] = pd.to_datetime(successful_data['start_ts'], unit='s')
             
             # Create subplot layout
             fig, axes = plt.subplots(2, 1, figsize=(15, 10))
@@ -335,7 +335,7 @@ Std: {successful_data['latency_ms'].std():.1f} ms"""
             # 2. Rolling average latency
             ax2 = axes[1]
             # Calculate rolling average with 30-second windows
-            successful_data_sorted = successful_data.sort_values('ts')
+            successful_data_sorted = successful_data.sort_values('start_ts')
             successful_data_sorted['rolling_avg_latency'] = successful_data_sorted['latency_ms'].rolling(window=10, min_periods=1).mean()
             
             ax2.plot(successful_data_sorted['datetime'], successful_data_sorted['rolling_avg_latency'], 

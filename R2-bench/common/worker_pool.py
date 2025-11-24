@@ -262,20 +262,24 @@ class WorkerPool:
                     break
 
     def get_step_stats(self, phase_id: str) -> Optional[Dict[str, Any]]:
-        """Get step statistics for a phase from persistence records."""
-        # Get all records for this phase from persistence
-        phase_records = [r for r in self.persistence.records if r.phase_id == phase_id]
 
-        if not phase_records:
+        """Get step statistics for a phase from persistence records with proper prorating across phases."""
+        # Get all records from persistence
+        all_records = self.persistence.records
+        
+        if not all_records:
             return None
 
-        # Calculate basic statistics
+        # Get records that started in this phase (for latency/concurrency stats)
+        phase_records = [r for r in all_records if r.phase_id == phase_id]
+        
+        # Calculate basic statistics from records that started in this phase
         total_requests = len(phase_records)
         successful_requests = len([r for r in phase_records if r.http_status == 200])
         error_requests = total_requests - successful_requests
         error_rate = error_requests / total_requests if total_requests > 0 else 0
 
-        # Calculate latency statistics
+        # Calculate latency statistics from records that started in this phase
         latencies = [r.latency_ms for r in phase_records if r.http_status == 200]
         avg_latency = sum(latencies) / len(latencies) if latencies else 0
         
@@ -289,19 +293,45 @@ class WorkerPool:
         else:
             p50_latency = p95_latency = p99_latency = 0
 
-        # Calculate throughput (simplified - total bytes / time)
-        total_bytes = sum(r.bytes for r in phase_records if r.http_status == 200)
+        # Calculate phase boundaries for prorating
+        # Phase starts when first request in this phase starts
         if phase_records:
-            duration_seconds = max(r.end_ts for r in phase_records) - min(
-                r.start_ts for r in phase_records
-            )
-            throughput_mbps = (
-                (total_bytes * 8) / (duration_seconds * 1_000_000)
-                if duration_seconds > 0
-                else 0
-            )
+            phase_start = min(r.start_ts for r in phase_records)
+            phase_end = max(r.end_ts for r in phase_records)
+            phase_duration = phase_end - phase_start
         else:
-            throughput_mbps = 0
+            phase_start = phase_end = phase_duration = 0
+
+        # Prorate bytes from ALL successful requests that overlap with this phase
+        total_bytes = 0.0
+        prorated_request_count = 0
+        
+        for record in all_records:
+            if record.http_status != 200:
+                continue
+            
+            # Check if request overlaps with this phase
+            if record.start_ts < phase_end and record.end_ts > phase_start:
+                # Calculate overlap
+                overlap_start = max(record.start_ts, phase_start)
+                overlap_end = min(record.end_ts, phase_end)
+                overlap_duration = max(0, overlap_end - overlap_start)
+                
+                # Calculate total request duration
+                request_duration = record.end_ts - record.start_ts
+                
+                if request_duration > 0:
+                    # Prorate bytes based on overlap
+                    prorated_bytes = (record.bytes * overlap_duration) / request_duration
+                    total_bytes += prorated_bytes
+                    prorated_request_count += 1
+        
+        # Calculate throughput using prorated bytes
+        throughput_mbps = (
+            (total_bytes * 8) / (phase_duration * 1_000_000)
+            if phase_duration > 0
+            else 0
+        )
 
         return {
             "phase_id": phase_id,
@@ -316,7 +346,7 @@ class WorkerPool:
             "p95_latency_ms": p95_latency,
             "p99_latency_ms": p99_latency,
             "total_bytes": total_bytes,
-            "duration_seconds": duration_seconds,
+            "duration_seconds": phase_duration,
         }
 
     def stop_workers(self):

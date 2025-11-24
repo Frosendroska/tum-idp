@@ -143,7 +143,7 @@ benchmark
 
 ## Tables columns
 
-`ts`,
+`start_ts`, `end_ts`,
 `thread_id`,
 `conn_id`,
 `object_key`,

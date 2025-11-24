@@ -8,6 +8,11 @@ import logging
 import os
 
 from .base import BasePlotter
+from .throughput_utils import (
+    prorate_bytes_to_time_windows,
+    calculate_phase_throughput_with_prorating,
+    get_phase_boundaries
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +34,9 @@ class DashboardPlotter(BasePlotter):
             
             total_bytes = self.data[self.data['http_status'] == 200]['bytes'].sum()
             
-            # Calculate time range
-            start_time = self.data['ts'].min()
-            end_time = self.data['ts'].max()
+            # Calculate time range using start_ts/end_ts
+            start_time = self.data['start_ts'].min()
+            end_time = self.data['end_ts'].max()
             duration = end_time - start_time
             
             # Calculate throughput
@@ -100,15 +105,28 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             gs = fig.add_gridspec(4, 4, hspace=0.3, wspace=0.3)
             fig.suptitle('R2 Benchmark Performance Dashboard', fontsize=20, fontweight='bold')
             
-            # 1. Throughput timeline (top row, spans 2 columns)
+            # 1. Throughput timeline (top row, spans 2 columns) - using prorated 30s windows
             ax1 = fig.add_subplot(gs[0, :2])
-            self.data['datetime'] = pd.to_datetime(self.data['ts'], unit='s')
-            self.data['time_window'] = self.data['datetime'].dt.floor('30s')
-            throughput_data = self.data.groupby('time_window').agg({
-                'bytes': 'sum',
-                'phase_id': 'first'
-            }).reset_index()
-            throughput_data['throughput_mbps'] = (throughput_data['bytes'] * 8) / (30 * 1_000_000)
+            # Use start_ts/end_ts for time range
+            start_time = self.data['start_ts'].min()
+            end_time = self.data['end_ts'].max()
+            
+            # Generate 30-second windows
+            window_size = 30.0
+            window_start_times = []
+            current_time = start_time
+            while current_time <= end_time:
+                window_start_times.append(current_time)
+                current_time += window_size
+            
+            # Use prorating utility
+            throughput_data = prorate_bytes_to_time_windows(
+                self.data,
+                window_start_times,
+                window_size_seconds=window_size,
+                start_col='start_ts',
+                end_col='end_ts'
+            )
             
             phase_color_map = self.get_phase_colors()
             phases = self.get_unique_phases()
@@ -116,7 +134,7 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             for phase in phases:
                 phase_data = throughput_data[throughput_data['phase_id'] == phase]
                 if len(phase_data) > 0:
-                    ax1.plot(phase_data['time_window'], phase_data['throughput_mbps'], 
+                    ax1.plot(phase_data['window_start'], phase_data['throughput_mbps'], 
                             marker='o', linewidth=2, markersize=4, 
                             color=phase_color_map[phase], label=f'Phase: {phase}')
             
@@ -137,9 +155,11 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             ax3 = fig.add_subplot(gs[1, :2])
             concurrency_stats = successful_data.groupby('concurrency').agg({
                 'bytes': 'sum',
-                'ts': ['min', 'max']
+                'start_ts': 'min',
+                'end_ts': 'max'
             }).reset_index()
             concurrency_stats.columns = ['concurrency', 'total_bytes', 'start_time', 'end_time']
+            
             concurrency_stats['duration_seconds'] = concurrency_stats['end_time'] - concurrency_stats['start_time']
             concurrency_stats['throughput_mbps'] = (concurrency_stats['total_bytes'] * 8) / (concurrency_stats['duration_seconds'] * 1_000_000)
             
@@ -173,16 +193,23 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             ax5.set_ylabel('Latency (ms)')
             ax5.grid(True, alpha=0.3)
             
-            # 6. Phase summary (third row, right)
+            # 6. Phase summary (third row, right) - using prorating
             ax6 = fig.add_subplot(gs[2, 2:])
-            phase_summary = self.data.groupby('phase_id').agg({
-                'bytes': 'sum',
-                'latency_ms': 'mean',
-                'ts': ['min', 'max']
-            }).reset_index()
-            phase_summary.columns = ['phase_id', 'total_bytes', 'avg_latency', 'start_time', 'end_time']
-            phase_summary['duration'] = phase_summary['end_time'] - phase_summary['start_time']
-            phase_summary['throughput_mbps'] = (phase_summary['total_bytes'] * 8) / (phase_summary['duration'] * 1_000_000)
+            phase_boundaries = get_phase_boundaries(successful_data)
+            phase_summary_list = []
+            for phase_id in successful_data['phase_id'].unique():
+                phase_result = calculate_phase_throughput_with_prorating(
+                    successful_data,  # Pass all data for proper prorating
+                    phase_id=phase_id,
+                    phase_boundaries=phase_boundaries
+                )
+                phase_result['phase_id'] = phase_id
+                # Get latency from requests that started in this phase
+                phase_data = successful_data[successful_data['phase_id'] == phase_id]
+                phase_result['avg_latency'] = phase_data['latency_ms'].mean() if len(phase_data) > 0 else 0
+                phase_summary_list.append(phase_result)
+            
+            phase_summary = pd.DataFrame(phase_summary_list)
             
             ax6.bar(phase_summary['phase_id'], phase_summary['throughput_mbps'], 
                    color=plt.cm.Set3(range(len(phase_summary))), alpha=0.7)
@@ -195,8 +222,8 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             ax7 = fig.add_subplot(gs[3, :])
             ax7.axis('off')
             
-            # Calculate key metrics
-            total_duration = self.data['ts'].max() - self.data['ts'].min()
+            # Calculate key metrics using start_ts/end_ts
+            total_duration = self.data['end_ts'].max() - self.data['start_ts'].min()
             total_bytes = successful_data['bytes'].sum()
             avg_throughput = (total_bytes * 8) / (total_duration * 1_000_000)
             avg_latency = successful_data['latency_ms'].mean()
