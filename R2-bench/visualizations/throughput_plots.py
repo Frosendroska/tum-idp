@@ -9,6 +9,11 @@ import logging
 import os
 
 from .base import BasePlotter
+from .throughput_utils import (
+    prorate_bytes_to_time_windows,
+    calculate_phase_throughput_with_prorating,
+    get_phase_boundaries
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +22,7 @@ class ThroughputPlotter(BasePlotter):
     """Plotter for throughput-related visualizations."""
     
     def create_throughput_timeline(self):
-        """Create throughput timeline plot with phase information."""
+        """Create throughput timeline plot with phase information using prorated 30-second windows."""
         if self.data is None or len(self.data) == 0:
             logger.warning("No data available for throughput plot")
             return None
@@ -25,19 +30,30 @@ class ThroughputPlotter(BasePlotter):
         try:
             plt.figure(figsize=(15, 8))
             
-            # Convert timestamp to datetime
-            self.data['datetime'] = pd.to_datetime(self.data['ts'], unit='s')
+            # Use start_ts/end_ts for time range
+            start_time = self.data['start_ts'].min()
+            end_time = self.data['end_ts'].max()
             
-            # Group by time windows and calculate throughput
-            self.data['time_window'] = self.data['datetime'].dt.floor('30s')
-            throughput_data = self.data.groupby('time_window').agg({
-                'bytes': 'sum',
-                'latency_ms': 'mean',
-                'phase_id': 'first'
-            }).reset_index()
+            # Generate 30-second windows
+            window_size = 30.0
+            window_start_times = []
+            current_time = start_time
+            while current_time <= end_time:
+                window_start_times.append(current_time)
+                current_time += window_size
             
-            # Calculate throughput in Mbps
-            throughput_data['throughput_mbps'] = (throughput_data['bytes'] * 8) / (30 * 1_000_000)
+            # Use prorating utility for 30-second windows
+            throughput_data = prorate_bytes_to_time_windows(
+                self.data,
+                window_start_times,
+                window_size_seconds=window_size,
+                start_col='start_ts',
+                end_col='end_ts'
+            )
+            
+            if throughput_data is None or len(throughput_data) == 0:
+                logger.warning("No throughput data generated")
+                return None
             
             # Get unique phases for coloring
             phase_color_map = self.get_phase_colors()
@@ -47,11 +63,11 @@ class ThroughputPlotter(BasePlotter):
             for phase in phases:
                 phase_data = throughput_data[throughput_data['phase_id'] == phase]
                 if len(phase_data) > 0:
-                    plt.plot(phase_data['time_window'], phase_data['throughput_mbps'], 
+                    plt.plot(phase_data['window_start'], phase_data['throughput_mbps'], 
                             marker='o', linewidth=2, markersize=4, 
                             color=phase_color_map[phase], label=f'Phase: {phase}')
             
-            plt.title('Throughput Timeline by Phase', fontsize=14)
+            plt.title('Throughput Timeline by Phase (30s windows, prorated)', fontsize=14)
             plt.xlabel('Time', fontsize=12)
             plt.ylabel('Throughput (Mbps)', fontsize=12)
             plt.grid(True, alpha=0.3)
@@ -120,84 +136,45 @@ class ThroughputPlotter(BasePlotter):
             return None
 
     def _calculate_per_second_throughput_sweep_line(self):
-        """Calculate per-second throughput using sweep line algorithm.
+        """Calculate per-second throughput using sweep line algorithm with start_ts/end_ts.
         
         The sweep line algorithm processes requests chronologically and maintains
         a sliding window of requests that contribute to each second's throughput.
+        Uses start_ts/end_ts for accurate timing and prorates bytes across seconds.
         """
         if len(self.data) == 0:
             return None
         
-        # Sort data by timestamp
-        sorted_data = self.data.sort_values('ts').copy()
-        
-        # Create time range for sweep line
-        start_time = sorted_data['ts'].min()
-        end_time = sorted_data['ts'].max()
+        # Use start_ts/end_ts for time range
+        start_time = self.data['start_ts'].min()
+        end_time = self.data['end_ts'].max()
         
         # Generate all seconds in the range
         seconds = []
-        current_time = start_time
-        while current_time <= end_time:
-            seconds.append(current_time)
+        current_time = int(start_time)
+        while current_time <= int(end_time) + 1:
+            seconds.append(float(current_time))
             current_time += 1
         
-        # Initialize result data structure
-        per_second_results = []
+        # Use shared prorating utility
+        per_second_data = prorate_bytes_to_time_windows(
+            self.data,
+            seconds,
+            window_size_seconds=1.0,
+            start_col='start_ts',
+            end_col='end_ts'
+        )
         
-        # Sweep line algorithm: process each second
-        for second_start in seconds:
-            second_end = second_start + 1
-            
-            # Find all requests that overlap with this second
-            overlapping_requests = sorted_data[
-                (sorted_data['ts'] < second_end) & 
-                (sorted_data['ts'] + sorted_data['latency_ms'] / 1000 >= second_start)
-            ]
-            
-            if len(overlapping_requests) > 0:
-                # Calculate bytes transferred in this second
-                total_bytes = 0
-                phase_id = overlapping_requests['phase_id'].iloc[0]
-                
-                for _, request in overlapping_requests.iterrows():
-                    request_start = request['ts']
-                    request_end = request['ts'] + request['latency_ms'] / 1000
-                    
-                    # Calculate overlap duration with current second
-                    overlap_start = max(request_start, second_start)
-                    overlap_end = min(request_end, second_end)
-                    overlap_duration = max(0, overlap_end - overlap_start)
-                    
-                    # Calculate total request duration
-                    request_duration = request_end - request_start
-                    
-                    if request_duration > 0:
-                        # Prorate bytes based on overlap duration
-                        prorated_bytes = (request['bytes'] * overlap_duration) / request_duration
-                        total_bytes += prorated_bytes
-                
-                # Calculate throughput in Mbps for this second
-                throughput_mbps = (total_bytes * 8) / 1_000_000
-                
-                per_second_results.append({
-                    'second': pd.to_datetime(second_start, unit='s'),
-                    'throughput_mbps': throughput_mbps,
-                    'phase_id': phase_id,
-                    'total_bytes': total_bytes,
-                    'request_count': len(overlapping_requests)
-                })
-        
-        if not per_second_results:
+        if per_second_data is None or len(per_second_data) == 0:
             return None
         
-        # Convert to DataFrame
-        result_df = pd.DataFrame(per_second_results)
+        # Rename column for compatibility
+        per_second_data = per_second_data.rename(columns={'window_start': 'second'})
         
-        logger.info(f"Generated {len(result_df)} per-second throughput measurements")
-        logger.info(f"Time range: {result_df['second'].min()} to {result_df['second'].max()}")
+        logger.info(f"Generated {len(per_second_data)} per-second throughput measurements")
+        logger.info(f"Time range: {per_second_data['second'].min()} to {per_second_data['second'].max()}")
         
-        return result_df
+        return per_second_data
     
     def create_throughput_vs_concurrency(self):
         """Create throughput vs concurrency analysis plot."""
@@ -212,14 +189,13 @@ class ThroughputPlotter(BasePlotter):
                 logger.warning("No successful requests for throughput vs concurrency plot")
                 return None
             
-            # Group by concurrency and calculate metrics
+            # Group by concurrency and calculate metrics using start_ts/end_ts
             concurrency_stats = successful_data.groupby('concurrency').agg({
                 'bytes': 'sum',
                 'latency_ms': ['mean', 'std', 'count'],
-                'ts': ['min', 'max']
+                'start_ts': 'min',
+                'end_ts': 'max'
             }).reset_index()
-            
-            # Flatten column names
             concurrency_stats.columns = ['concurrency', 'total_bytes', 'avg_latency', 'latency_std', 
                                         'request_count', 'start_time', 'end_time']
             
@@ -300,23 +276,30 @@ class ThroughputPlotter(BasePlotter):
                 logger.warning("No successful requests for throughput stats table")
                 return None
             
-            # Group by phase and calculate metrics
-            phase_stats = successful_data.groupby('phase_id').agg({
-                'bytes': 'sum',
-                'ts': ['min', 'max', 'count'],
-                'latency_ms': 'mean',
-                'concurrency': 'mean'
-            }).reset_index()
+            # Calculate throughput for each phase using prorating utility
+            # First, get phase boundaries from all data
+            phase_boundaries = get_phase_boundaries(successful_data)
             
-            # Flatten column names
-            phase_stats.columns = ['phase_id', 'total_bytes', 'start_time', 'end_time', 
-                                  'request_count', 'avg_latency', 'avg_concurrency']
+            phase_stats_list = []
+            for phase_id in successful_data['phase_id'].unique():
+                # Use the new prorating function that considers ALL requests overlapping with the phase
+                phase_result = calculate_phase_throughput_with_prorating(
+                    successful_data,  # Pass all data, not just phase_data
+                    phase_id=phase_id,
+                    phase_boundaries=phase_boundaries
+                )
+                
+                # Get additional stats from requests that started in this phase
+                phase_data = successful_data[successful_data['phase_id'] == phase_id]
+                phase_result['phase_id'] = phase_id
+                phase_result['avg_latency'] = phase_data['latency_ms'].mean() if len(phase_data) > 0 else 0
+                phase_result['avg_concurrency'] = phase_data['concurrency'].mean() if len(phase_data) > 0 else 0
+                phase_result['requests_per_second'] = phase_result['request_count'] / phase_result['duration_seconds'] if phase_result['duration_seconds'] > 0 else 0
+                phase_result['total_gb'] = phase_result['total_bytes'] / (1024**3)
+                
+                phase_stats_list.append(phase_result)
             
-            # Calculate throughput for each phase
-            phase_stats['duration_seconds'] = phase_stats['end_time'] - phase_stats['start_time']
-            phase_stats['throughput_mbps'] = (phase_stats['total_bytes'] * 8) / (phase_stats['duration_seconds'] * 1_000_000)
-            phase_stats['requests_per_second'] = phase_stats['request_count'] / phase_stats['duration_seconds']
-            phase_stats['total_gb'] = phase_stats['total_bytes'] / (1024**3)
+            phase_stats = pd.DataFrame(phase_stats_list)
             
             # Create table data
             table_data = []
@@ -355,9 +338,9 @@ class ThroughputPlotter(BasePlotter):
                 ]
                 table_data.append(table_row)
             
-            # Add overall summary row
+            # Add overall summary row using start_ts/end_ts
             total_bytes = successful_data['bytes'].sum()
-            total_duration = successful_data['ts'].max() - successful_data['ts'].min()
+            total_duration = successful_data['end_ts'].max() - successful_data['start_ts'].min()
             total_requests = len(successful_data)
             overall_throughput = (total_bytes * 8) / (total_duration * 1_000_000) if total_duration > 0 else 0
             overall_rps = total_requests / total_duration if total_duration > 0 else 0
