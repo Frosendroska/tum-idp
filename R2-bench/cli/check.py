@@ -2,12 +2,17 @@
 Refactored Phase 1: Capacity discovery and plateau detection with precise concurrency control.
 """
 
+import asyncio
 import os
 import sys
 import logging
 import argparse
 import time
 from typing import Dict, Any
+
+# Required: Use uvloop for better performance
+import uvloop
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 # Add the current directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -96,7 +101,7 @@ class CapacityChecker:
             )
             raise
 
-    def check_capacity(self, object_key: str = None):
+    async def check_capacity(self, object_key: str = None):
         """Execute the refactored capacity discovery process."""
         if object_key:
             self.object_key = object_key
@@ -104,116 +109,118 @@ class CapacityChecker:
         logger.info("Starting capacity discovery process")
         logger.info(f"Using object key: {self.object_key}")
 
-        try:
-            # Check if object exists
-            logger.info("Checking if test object exists...")
-            response = self.storage_system.client.head_object(
-                Bucket=self.storage_system.bucket_name, Key=self.object_key
-            )
-            logger.info(f"Test object found: {response['ContentLength']} bytes")
-        except Exception as e:
-            logger.warning(f"Test object not found or error accessing it: {e}")
-            logger.info(
-                "Attempting to create a smaller test object for more reliable testing..."
-            )
-            return
-
-        try:
-            # Initialize shared worker pool
-            self.worker_pool = WorkerPool(self.storage_system, self.persistence, MAX_CONCURRENCY)
-
-            # Phase 1: Warm-up using WarmUp class with shared worker pool
-            logger.info("=== Phase 1: Concurrent Warm-up ===")
-
-            warm_up = WarmUp(
-                worker_pool=self.worker_pool,
-                warm_up_minutes=WARM_UP_MINUTES,
-                concurrency=INITIAL_CONCURRENCY,
-                object_key=self.object_key,
-                system_bandwidth_mbps=self.system_bandwidth_mbps,
-            )
-
-            warm_up_results = warm_up.execute()
-
-            logger.info(
-                f"Warm-up completed: {warm_up_results['throughput_mbps']:.1f} Mbps"
-            )
-
-            # Phase 2: Ramp-up to find optimal concurrency using Ramp class with shared worker pool
-            logger.info("=== Phase 2: Ramp-up ===")
-            logger.info(
-                f"Starting ramp: {INITIAL_CONCURRENCY} -> {MAX_CONCURRENCY}, step {RAMP_STEP_CONCURRENCY} every {RAMP_STEP_MINUTES}m"
-            )
-
-            ramp = Ramp(
-                worker_pool=self.worker_pool,
-                initial_concurrency=INITIAL_CONCURRENCY,
-                ramp_step=RAMP_STEP_CONCURRENCY,
-                step_duration_seconds=RAMP_STEP_MINUTES * SECONDS_PER_MINUTE,
-                object_key=self.object_key,
-                plateau_threshold=PLATEAU_THRESHOLD,
-                system_bandwidth_mbps=self.system_bandwidth_mbps,
-            )
-
-            ramp_results = ramp.find_optimal_concurrency(
-                max_concurrency=MAX_CONCURRENCY
-            )
-
-            # Save results to parquet
-            parquet_file = self.persistence.save_to_file("benchmark")
-
-            # Report results
-            logger.info("=== Capacity Discovery Results ===")
-            logger.info(f"Best concurrency: {ramp_results['best_concurrency']}")
-            logger.info(
-                f"Best throughput: {ramp_results['best_throughput_mbps']:.1f} Mbps"
-            )
-            logger.info(f"Steps completed: {len(ramp_results['step_results'])}")
-            logger.info(f"Plateau detected: {ramp_results['plateau_detected']}")
-            logger.info(f"Plateau reason: {ramp_results['plateau_reason']}")
-
-            # Show step-by-step results
-            for i, step in enumerate(ramp_results["step_results"]):
+        # Use storage system as async context manager
+        async with self.storage_system:
+            try:
+                # Check if object exists
+                logger.info("Checking if test object exists...")
+                response = await self.storage_system.client.head_object(
+                    Bucket=self.storage_system.bucket_name, Key=self.object_key
+                )
+                logger.info(f"Test object found: {response['ContentLength']} bytes")
+            except Exception as e:
+                logger.warning(f"Test object not found or error accessing it: {e}")
                 logger.info(
-                    f"Step {i+1}: {step['concurrency']} conn -> {step['throughput_mbps']:.1f} Mbps"
+                    "Attempting to create a smaller test object for more reliable testing..."
+                )
+                return
+
+            try:
+                # Initialize shared worker pool
+                self.worker_pool = WorkerPool(self.storage_system, self.persistence, MAX_CONCURRENCY)
+
+                # Phase 1: Warm-up using WarmUp class with shared worker pool
+                logger.info("=== Phase 1: Concurrent Warm-up ===")
+
+                warm_up = WarmUp(
+                    worker_pool=self.worker_pool,
+                    warm_up_minutes=WARM_UP_MINUTES,
+                    concurrency=INITIAL_CONCURRENCY,
+                    object_key=self.object_key,
+                    system_bandwidth_mbps=self.system_bandwidth_mbps,
                 )
 
-            if parquet_file:
-                logger.info(f"Detailed results saved to: {parquet_file}")
+                warm_up_results = await warm_up.execute()
 
-            return {
-                "warm_up": warm_up_results,
-                "ramp_up": ramp_results,
-                "optimal_concurrency": ramp_results["best_concurrency"],
-                "max_throughput_mbps": ramp_results["best_throughput_mbps"],
-                "plateau_detected": ramp_results["plateau_detected"],
-                "plateau_reason": ramp_results["plateau_reason"],
-            }
+                logger.info(
+                    f"Warm-up completed: {warm_up_results['throughput_mbps']:.1f} Mbps"
+                )
 
-        except KeyboardInterrupt:
-            logger.info("Benchmark interrupted by user (Ctrl+C)")
-            return {
-                "warm_up": {"error": "Interrupted by user"},
-                "ramp_up": {"error": "Interrupted by user"},
-                "optimal_concurrency": 0,
-                "max_throughput_mbps": 0,
-                "plateau_detected": False,
-                "plateau_reason": "Interrupted by user",
-            }
-        except Exception as e:
-            logger.error(f"Error during benchmark: {e}")
-            import traceback
+                # Phase 2: Ramp-up to find optimal concurrency using Ramp class with shared worker pool
+                logger.info("=== Phase 2: Ramp-up ===")
+                logger.info(
+                    f"Starting ramp: {INITIAL_CONCURRENCY} -> {MAX_CONCURRENCY}, step {RAMP_STEP_CONCURRENCY} every {RAMP_STEP_MINUTES}m"
+                )
 
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            raise
-        finally:
-            # Cleanup shared worker pool
-            if self.worker_pool:
-                self.worker_pool.cleanup()
+                ramp = Ramp(
+                    worker_pool=self.worker_pool,
+                    initial_concurrency=INITIAL_CONCURRENCY,
+                    ramp_step=RAMP_STEP_CONCURRENCY,
+                    step_duration_seconds=RAMP_STEP_MINUTES * SECONDS_PER_MINUTE,
+                    object_key=self.object_key,
+                    plateau_threshold=PLATEAU_THRESHOLD,
+                    system_bandwidth_mbps=self.system_bandwidth_mbps,
+                )
+
+                ramp_results = await ramp.find_optimal_concurrency(
+                    max_concurrency=MAX_CONCURRENCY
+                )
+
+                # Save results to parquet
+                parquet_file = self.persistence.save_to_file("benchmark")
+
+                # Report results
+                logger.info("=== Capacity Discovery Results ===")
+                logger.info(f"Best concurrency: {ramp_results['best_concurrency']}")
+                logger.info(
+                    f"Best throughput: {ramp_results['best_throughput_mbps']:.1f} Mbps"
+                )
+                logger.info(f"Steps completed: {len(ramp_results['step_results'])}")
+                logger.info(f"Plateau detected: {ramp_results['plateau_detected']}")
+                logger.info(f"Plateau reason: {ramp_results['plateau_reason']}")
+
+                # Show step-by-step results
+                for i, step in enumerate(ramp_results["step_results"]):
+                    logger.info(
+                        f"Step {i+1}: {step['concurrency']} conn -> {step['throughput_mbps']:.1f} Mbps"
+                    )
+
+                if parquet_file:
+                    logger.info(f"Detailed results saved to: {parquet_file}")
+
+                return {
+                    "warm_up": warm_up_results,
+                    "ramp_up": ramp_results,
+                    "optimal_concurrency": ramp_results["best_concurrency"],
+                    "max_throughput_mbps": ramp_results["best_throughput_mbps"],
+                    "plateau_detected": ramp_results["plateau_detected"],
+                    "plateau_reason": ramp_results["plateau_reason"],
+                }
+
+            except KeyboardInterrupt:
+                logger.info("Benchmark interrupted by user (Ctrl+C)")
+                return {
+                    "warm_up": {"error": "Interrupted by user"},
+                    "ramp_up": {"error": "Interrupted by user"},
+                    "optimal_concurrency": 0,
+                    "max_throughput_mbps": 0,
+                    "plateau_detected": False,
+                    "plateau_reason": "Interrupted by user",
+                }
+            except Exception as e:
+                logger.error(f"Error during benchmark: {e}")
+                import traceback
+
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                raise
+            finally:
+                # Cleanup shared worker pool
+                if self.worker_pool:
+                    await self.worker_pool.cleanup()
 
 
-def main():
-    """Main entry point for the refactored capacity checker."""
+async def main_async():
+    """Main async entry point for the refactored capacity checker."""
     parser = argparse.ArgumentParser(description="Refactored R2 capacity checker")
     parser.add_argument(
         "--storage", choices=["r2", "s3"], default="r2", help="Storage type"
@@ -228,11 +235,11 @@ def main():
     checker = CapacityChecker(
         storage_type=args.storage,
         object_key=args.object_key,
-        system_bandwidth_mbps=args.system_bandwidth_mbps,
+        system_bandwidth_mbps=args.worker_bandwidth,
     )
 
     try:
-        results = checker.check_capacity()
+        results = await checker.check_capacity()
         print("\n=== Final Results ===")
         print(f"Optimal concurrency: {results['optimal_concurrency']}")
         print(f"Max throughput: {results['max_throughput_mbps']:.1f} Mbps")
@@ -243,6 +250,11 @@ def main():
     except Exception as e:
         logger.error(f"Benchmark failed: {e}")
         sys.exit(1)
+
+
+def main():
+    """Main entry point for the refactored capacity checker."""
+    asyncio.run(main_async())
 
 
 if __name__ == "__main__":

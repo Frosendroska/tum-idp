@@ -2,6 +2,7 @@
 Sophisticated ramp-up algorithm for finding optimal concurrency with advanced architecture.
 """
 
+import asyncio
 import time
 import logging
 from typing import Dict, Any
@@ -54,14 +55,14 @@ class Ramp:
             f"Initialized ramp with plateau detection: {initial_concurrency} -> ?, step {self.ramp_step} every {self.step_duration_seconds}s, system limit: {self.system_bandwidth_mbps} Mbps"
         )
 
-    def execute_step(self, concurrency: int, step_id: str) -> Dict[str, Any]:
+    async def execute_step(self, concurrency: int, step_id: str) -> Dict[str, Any]:
         """Execute one ramp step at the given concurrency level."""
         logger.info(
             f"Starting ramp step: {concurrency} connections for {self.step_duration_seconds} seconds"
         )
 
         # Adjust worker pool to target concurrency and begin ramp step
-        self.worker_pool.start_workers(concurrency, self.object_key, step_id)
+        await self.worker_pool.start_workers(concurrency, self.object_key, step_id)
 
         start_time = time.time()
         end_time = start_time + self.step_duration_seconds
@@ -77,7 +78,7 @@ class Ramp:
                     f"Step progress: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining"
                 )
 
-            time.sleep(1)
+            await asyncio.sleep(1)
 
         # Get step statistics
         step_stats = self.worker_pool.get_step_stats(step_id)
@@ -107,7 +108,7 @@ class Ramp:
 
         return step_stats
 
-    def find_optimal_concurrency(self, max_concurrency: int = 100):
+    async def find_optimal_concurrency(self, max_concurrency: int = 100):
         """Find optimal concurrency by ramping up until plateau is reached."""
         current_concurrency = self.initial_concurrency
         best_throughput = 0
@@ -120,10 +121,7 @@ class Ramp:
         )
 
         try:
-            while (
-                current_concurrency <= max_concurrency
-                and not self.worker_pool.stop_event.is_set()
-            ):
+            while current_concurrency <= max_concurrency:
                 step_count += 1
                 phase_id = f"ramp_{step_count}"
 
@@ -132,7 +130,7 @@ class Ramp:
                 )
 
                 # Execute step using sophisticated architecture
-                step_result = self.execute_step(current_concurrency, phase_id)
+                step_result = await self.execute_step(current_concurrency, phase_id)
                 step_results.append(step_result)
 
                 # Check error rate

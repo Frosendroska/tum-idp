@@ -2,12 +2,17 @@
 Phase 2: Long-term performance benchmark with precise concurrency control.
 """
 
+import asyncio
 import os
 import sys
 import logging
 import argparse
 import time
 from typing import Dict, Any
+
+# Required: Use uvloop for better performance
+import uvloop
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 # Add the current directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -100,145 +105,142 @@ class BenchmarkRunner:
             logger.error(f"Failed to initialize components: {e}")
             raise
 
-    def run_benchmark(self) -> Dict[str, Any]:
+    async def run_benchmark(self) -> Dict[str, Any]:
         """Execute the complete benchmark."""
         logger.info("Starting benchmark")
         logger.info(f"Using object key: {self.object_key}")
 
-        try:
-            # Check if object exists
-            logger.info("Checking if test object exists...")
-            response = self.storage_system.client.head_object(
-                Bucket=self.storage_system.bucket_name, Key=self.object_key
-            )
-            logger.info(f"Test object found: {response['ContentLength']} bytes")
-        except Exception as e:
-            logger.warning(f"Test object not found or error accessing it: {e}")
-            logger.info(
-                "Attempting to create a smaller test object for more reliable testing..."
-            )
-
-            # Try to create a smaller test object (1GB instead of 9GB)
+        # Use storage system as async context manager
+        async with self.storage_system:
             try:
-                from cli.uploader import Uploader
-
-                uploader = Uploader(self.storage_type)
-                success = uploader.upload_test_object(
-                    size_gb=1, object_key="test-object-1gb"
+                # Check if object exists
+                logger.info("Checking if test object exists...")
+                response = await self.storage_system.client.head_object(
+                    Bucket=self.storage_system.bucket_name, Key=self.object_key
                 )
-                if success:
-                    self.object_key = "test-object-1gb"
-                    logger.info(
-                        "Successfully created 1GB test object, using it for benchmarking"
+                logger.info(f"Test object found: {response['ContentLength']} bytes")
+            except Exception as e:
+                logger.warning(f"Test object not found or error accessing it: {e}")
+                logger.info(
+                    "Attempting to create a smaller test object for more reliable testing..."
+                )
+
+                # Try to create a smaller test object (1GB instead of 9GB)
+                try:
+                    from cli.uploader import Uploader
+
+                    uploader = Uploader(self.storage_type)
+                    success = await uploader.upload_test_object(
+                        size_gb=1, object_key="test-object-1gb"
                     )
-                else:
-                    logger.error("Failed to create test object")
+                    if success:
+                        self.object_key = "test-object-1gb"
+                        logger.info(
+                            "Successfully created 1GB test object, using it for benchmarking"
+                        )
+                    else:
+                        logger.error("Failed to create test object")
+                        raise
+                except Exception as upload_error:
+                    logger.error(f"Failed to create test object: {upload_error}")
+                    logger.error(
+                        "Please run 'python cli.py upload --storage r2' first to create the test object"
+                    )
                     raise
-            except Exception as upload_error:
-                logger.error(f"Failed to create test object: {upload_error}")
-                logger.error(
-                    "Please run 'python cli.py upload --storage r2' first to create the test object"
+
+            try:
+                # Phase 1: Warm-up using WarmUp class with shared worker pool
+                logger.info("=== Phase 1: Concurrent Warm-up ===")
+
+                warm_up = WarmUp(
+                    worker_pool=self.worker_pool,
+                    warm_up_minutes=WARM_UP_MINUTES,
+                    concurrency=self.concurrency,
+                    object_key=self.object_key,
+                    system_bandwidth_mbps=self.system_bandwidth_mbps,
                 )
-                raise
 
-        try:
-            # Phase 1: Warm-up using WarmUp class with shared worker pool
-            logger.info("=== Phase 1: Concurrent Warm-up ===")
+                warm_up_results = await warm_up.execute()
 
-            warm_up = WarmUp(
-                worker_pool=self.worker_pool,
-                warm_up_minutes=WARM_UP_MINUTES,
-                concurrency=self.concurrency,
-                object_key=self.object_key,
-                system_bandwidth_mbps=self.system_bandwidth_mbps,
-            )
+                logger.info(
+                    f"Warm-up completed: {warm_up_results['throughput_mbps']:.1f} Mbps"
+                )
 
-            warm_up_results = warm_up.execute()
+                # Phase 2: Ramp-up to find optimal concurrency using Ramp class with shared worker pool
+                logger.info("=== Phase 2: Ramp-up ===")
+                logger.info(
+                    f"Starting ramp: {self.concurrency} -> {MAX_CONCURRENCY}, step 8 every 2m"
+                )
 
-            logger.info(
-                f"Warm-up completed: {warm_up_results['throughput_mbps']:.1f} Mbps"
-            )
+                ramp = Ramp(
+                    worker_pool=self.worker_pool,
+                    initial_concurrency=self.concurrency,
+                    ramp_step=8,
+                    step_duration_seconds=120,  # 2 minutes
+                    object_key=self.object_key,
+                    plateau_threshold=0.2,
+                    system_bandwidth_mbps=self.system_bandwidth_mbps,
+                )
 
-            # Phase 2: Ramp-up to find optimal concurrency using Ramp class with shared worker pool
-            logger.info("=== Phase 2: Ramp-up ===")
-            logger.info(
-                f"Starting ramp: {self.concurrency} -> {MAX_CONCURRENCY}, step 8 every 2m"
-            )
+                ramp_results = await ramp.find_optimal_concurrency(
+                    max_concurrency=MAX_CONCURRENCY
+                )
 
-            ramp = Ramp(
-                worker_pool=self.worker_pool,
-                initial_concurrency=self.concurrency,
-                ramp_step=8,
-                step_duration_seconds=120,  # 2 minutes
-                object_key=self.object_key,
-                system_bandwidth_mbps=self.system_bandwidth_mbps,
-            )
+                # Phase 3: Steady state benchmark using sophisticated SteadyState class
+                logger.info("=== Phase 3: Steady State Benchmark ===")
+                logger.info(
+                    f"Running steady state for {STEADY_STATE_HOURS} hours with {ramp_results['best_concurrency']} connections"
+                )
 
-            ramp_results = ramp.find_optimal_concurrency(
-                max_concurrency=MAX_CONCURRENCY
-            )
+                steady_state = SteadyState(
+                    worker_pool=self.worker_pool,
+                    duration_hours=STEADY_STATE_HOURS,
+                    concurrency=ramp_results["best_concurrency"],
+                    object_key=self.object_key,
+                    system_bandwidth_mbps=self.system_bandwidth_mbps,
+                )
 
-            # Phase 3: Steady state benchmark using sophisticated SteadyState class
-            logger.info("=== Phase 3: Steady State Benchmark ===")
-            logger.info(
-                f"Running steady state for {STEADY_STATE_HOURS} hours with {ramp_results['best_concurrency']} connections"
-            )
+                steady_results = await steady_state.execute()
 
-            steady_state = SteadyState(
-                worker_pool=self.worker_pool,
-                duration_hours=STEADY_STATE_HOURS,
-                concurrency=ramp_results["best_concurrency"],
-                object_key=self.object_key,
-                system_bandwidth_mbps=self.system_bandwidth_mbps,
-            )
+                # Save results to parquet
+                parquet_file = self.persistence.save_to_file("benchmark")
 
-            steady_results = steady_state.execute()
+                # Report results
+                logger.info("=== Benchmark Results ===")
+                logger.info(f"Total requests: {steady_results.get('total_requests', 0)}")
+                logger.info(
+                    f"Successful requests: {steady_results.get('successful_requests', 0)}"
+                )
+                logger.info(f"Throughput: {steady_results.get('throughput_mbps', 0):.1f} Mbps")
+                logger.info(
+                    f"Average latency: {steady_results.get('avg_latency_ms', 0):.1f} ms"
+                )
+                logger.info(
+                    f"P95 latency: {steady_results.get('p95_latency_ms', 0):.1f} ms"
+                )
+                logger.info(
+                    f"P99 latency: {steady_results.get('p99_latency_ms', 0):.1f} ms"
+                )
 
-            # Save results to parquet
-            parquet_file = self.persistence.save_to_file("benchmark")
+                if parquet_file:
+                    logger.info(f"Detailed results saved to: {parquet_file}")
 
-            # Report results
-            logger.info("=== Benchmark Results ===")
-            logger.info(f"Total requests: {steady_results.get('total_requests', 0)}")
-            logger.info(
-                f"Successful requests: {steady_results.get('successful_requests', 0)}"
-            )
-            logger.info(f"Success rate: {steady_results.get('success_rate', 0):.2%}")
-            logger.info(
-                f"Total bytes: {steady_results.get('total_bytes_downloaded', 0) / (1024**3):.2f} GB"
-            )
-            logger.info(
-                f"Average throughput: {steady_results.get('avg_throughput_mbps', 0):.1f} Mbps"
-            )
-            logger.info(
-                f"Average latency: {steady_results.get('avg_latency_ms', 0):.1f} ms"
-            )
-            logger.info(
-                f"P95 latency: {steady_results.get('p95_latency_ms', 0):.1f} ms"
-            )
-            logger.info(
-                f"P99 latency: {steady_results.get('p99_latency_ms', 0):.1f} ms"
-            )
-
-            if parquet_file:
-                logger.info(f"Detailed results saved to: {parquet_file}")
-
-            return {
-                "warm_up": warm_up_results,
-                "ramp_up": ramp_results,
-                "steady_state": steady_results,
-                "storage_type": self.storage_type,
-                "concurrency": self.concurrency,
-                "optimal_concurrency": ramp_results["best_concurrency"],
-            }
-        finally:
-            # Cleanup shared worker pool
-            if self.worker_pool:
-                self.worker_pool.cleanup()
+                return {
+                    "warm_up": warm_up_results,
+                    "ramp_up": ramp_results,
+                    "steady_state": steady_results,
+                    "storage_type": self.storage_type,
+                    "concurrency": self.concurrency,
+                    "optimal_concurrency": ramp_results["best_concurrency"],
+                }
+            finally:
+                # Cleanup shared worker pool
+                if self.worker_pool:
+                    await self.worker_pool.cleanup()
 
 
-def main():
-    """Main entry point for the benchmark runner."""
+async def main_async():
+    """Main async entry point for the benchmark runner."""
     parser = argparse.ArgumentParser(description="R2 benchmark runner")
     parser.add_argument(
         "--storage", choices=["r2", "s3"], default="r2", help="Storage type"
@@ -257,27 +259,29 @@ def main():
         storage_type=args.storage,
         object_key=args.object_key,
         concurrency=args.concurrency,
-        system_bandwidth_mbps=args.system_bandwidth_mbps,
+        system_bandwidth_mbps=args.worker_bandwidth,
     )
 
     try:
-        results = runner.run_benchmark()
+        results = await runner.run_benchmark()
         print("\n=== Final Results ===")
         print(f"Storage type: {results['storage_type']}")
         print(f"Concurrency: {results['concurrency']}")
-        if "steady_state" in results and "error" not in results["steady_state"]:
+        if "steady_state" in results:
             steady = results["steady_state"]
             print(f"Total requests: {steady.get('total_requests', 0)}")
-            print(f"Success rate: {steady.get('success_rate', 0):.2%}")
-            print(
-                f"Average throughput: {steady.get('avg_throughput_mbps', 0):.1f} Mbps"
-            )
+            print(f"Throughput: {steady.get('throughput_mbps', 0):.1f} Mbps")
             print(f"Average latency: {steady.get('avg_latency_ms', 0):.1f} ms")
     except KeyboardInterrupt:
         logger.info("Benchmark interrupted by user")
     except Exception as e:
         logger.error(f"Benchmark failed: {e}")
         sys.exit(1)
+
+
+def main():
+    """Main entry point for the benchmark runner."""
+    asyncio.run(main_async())
 
 
 if __name__ == "__main__":
