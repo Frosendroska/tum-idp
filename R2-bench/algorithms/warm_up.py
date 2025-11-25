@@ -2,6 +2,7 @@
 Concurrent warm-up algorithm for the R2 benchmark with sophisticated architecture.
 """
 
+import asyncio
 import time
 import logging
 from typing import Dict, Any
@@ -36,12 +37,12 @@ class WarmUp:
             f"Initialized warm-up: {warm_up_minutes} minutes, {self.concurrency} connections"
         )
 
-    def execute(self) -> Dict[str, Any]:
+    async def execute(self) -> Dict[str, Any]:
         """Execute the warm-up phase using shared worker pool."""
         logger.info(f"Starting warm-up phase with {self.concurrency} connections...")
 
         # Start workers for warm-up and begin phase
-        self.worker_pool.start_workers(self.concurrency, self.object_key, "warmup")
+        await self.worker_pool.start_workers(self.concurrency, self.object_key, "warmup")
 
         # Wait for warm-up duration
         warm_up_duration = self.warm_up_minutes * SECONDS_PER_MINUTE
@@ -59,7 +60,7 @@ class WarmUp:
                     f"Step progress: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining"
                 )
 
-            time.sleep(1)
+            await asyncio.sleep(1)
 
         # Get step statistics
         step_stats = self.worker_pool.get_step_stats("warmup")

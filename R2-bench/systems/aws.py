@@ -11,11 +11,11 @@ logger = logging.getLogger(__name__)
 
 class AWSSystem(ObjectStorageSystem):
     """AWS S3 object storage system."""
-    
+
     def __init__(self, credentials: dict = None):
         if credentials is None:
             credentials = {}
-        
+
         super().__init__(
             endpoint=S3_ENDPOINT,
             bucket_name=BUCKET_NAME,

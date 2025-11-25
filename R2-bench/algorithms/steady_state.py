@@ -2,6 +2,7 @@
 Steady state algorithm for long-term benchmarking with worker pool and phase manager.
 """
 
+import asyncio
 import time
 import logging
 from typing import Dict, Any, Optional
@@ -33,12 +34,12 @@ class SteadyState:
         
         logger.info(f"Initialized steady state: {concurrency} conn for {duration_hours}h")
     
-    def execute(self) -> Dict[str, Any]:
+    async def execute(self) -> Dict[str, Any]:
         """Execute the steady state phase using shared worker pool."""
         logger.info(f"Starting steady state: {self.concurrency} connections for {self.duration_hours} hours")
         
         # Start workers for steady state and begin phase
-        self.worker_pool.start_workers(self.concurrency, self.object_key, "steady_state")
+        await self.worker_pool.start_workers(self.concurrency, self.object_key, "steady_state")
         
         # Wait for steady state duration with periodic logging
         steady_duration = self.duration_hours * SECONDS_PER_HOUR
@@ -56,7 +57,7 @@ class SteadyState:
                     f"Step progress: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining"
                 )
 
-            time.sleep(1)
+            await asyncio.sleep(1)
         
         # Get step statistics
         step_stats = self.worker_pool.get_step_stats("steady_state")
@@ -85,5 +86,3 @@ class SteadyState:
             }
         
         return step_stats
-            
-    
