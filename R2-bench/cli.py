@@ -5,6 +5,11 @@ import os
 import sys
 import logging
 import argparse
+import asyncio
+
+# Required: Use uvloop for better performance
+import uvloop
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 # Add the current directory to Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -85,7 +90,7 @@ Examples:
         
         return parser
     
-    def run_upload(self, args):
+    async def run_upload(self, args):
         """Run the upload phase."""
         try:
             from cli.uploader import Uploader
@@ -93,7 +98,7 @@ Examples:
             logger.info("=== Upload Test Objects ===")
             
             uploader = Uploader(args.storage)
-            success = uploader.upload_test_object(args.size, args.object_key)
+            success = await uploader.upload_test_object(args.size, args.object_key)
             
             if success:
                 logger.info("Upload phase completed successfully")
@@ -106,7 +111,7 @@ Examples:
             logger.error(f"Error in upload phase: {e}")
             return 1
     
-    def run_check(self, args):
+    async def run_check(self, args):
         """Run the capacity check phase."""
         try:
             from cli.check import CapacityChecker
@@ -114,7 +119,7 @@ Examples:
             logger.info("=== Capacity Discovery ===")
             
             checker = CapacityChecker(args.storage, args.object_key, args.system_bandwidth)
-            results = checker.check_capacity(args.object_key)
+            results = await checker.check_capacity(args.object_key)
             
             logger.info("Capacity check completed successfully")
             return 0
@@ -123,21 +128,21 @@ Examples:
             logger.error(f"Error in capacity check phase: {e}")
             return 1
     
-    def run_benchmark(self, args):
+    async def run_benchmark(self, args):
         """Run the benchmark phase."""
         try:
-            from cli.benchmark import SimpleBenchmarkRunner
+            from cli.benchmark import BenchmarkRunner
             
             logger.info("=== Long-term Benchmark ===")
             
-            runner = SimpleBenchmarkRunner(
+            runner = BenchmarkRunner(
                 storage_type=args.storage,
                 concurrency=args.concurrency,
                 object_key=args.object_key
             )
             
             # Execute benchmark
-            results = runner.run_benchmark()
+            results = await runner.run_benchmark()
             
             logger.info("Benchmark phase completed successfully")
             return 0
@@ -190,11 +195,11 @@ Examples:
         
         try:
             if parsed_args.command == 'upload':
-                return self.run_upload(parsed_args)
+                return asyncio.run(self.run_upload(parsed_args))
             elif parsed_args.command == 'check':
-                return self.run_check(parsed_args)
+                return asyncio.run(self.run_check(parsed_args))
             elif parsed_args.command == 'benchmark':
-                return self.run_benchmark(parsed_args)
+                return asyncio.run(self.run_benchmark(parsed_args))
             elif parsed_args.command == 'visualize':
                 return self.run_visualize(parsed_args)
             else:

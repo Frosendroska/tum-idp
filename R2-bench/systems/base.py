@@ -8,12 +8,22 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 import logging
 import time
-from typing import Tuple, Optional
+import asyncio
+import os
+from typing import Tuple, Optional, Dict, Any
 from urllib3.exceptions import IncompleteRead
 from botocore.exceptions import ReadTimeoutError
 from configuration import RANGE_SIZE_MB, MAX_CONCURRENCY
 
 logger = logging.getLogger(__name__)
+
+# Try to import psutil for connection monitoring (optional)
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+    logger.warning("psutil not available - connection monitoring will be limited")
 
 
 class ObjectStorageSystem:
@@ -23,60 +33,110 @@ class ObjectStorageSystem:
         self.endpoint = endpoint
         self.bucket_name = bucket_name
         self.credentials = credentials
-        self.session = None
-        self.client = None
-        self._setup_session()
-
-    def _setup_session(self):
-        """Set up the async boto3 session with CRT and optimized configuration."""
+        
+        # Verify CRT is actually available
+        self._has_crt = False
         try:
-            # Create aioboto3 session
-            self.session = aioboto3.Session(
-                aws_access_key_id=self.credentials.get("access_key_id"),
-                aws_secret_access_key=self.credentials.get("secret_access_key"),
-                region_name=self.credentials.get("region_name", "auto"),
+            import awscrt
+            logger.info(f"✓ AWS CRT available: version {awscrt.__version__}")
+            self._has_crt = True
+        except ImportError:
+            logger.warning(
+                "⚠️ AWS CRT not installed - performance will be severely limited!\n"
+                "Install with: pip install awscrt 'botocore[crt]'"
             )
-
-            # Configure for maximum performance
-            # CRT is required and enabled by default in aioboto3
-            config = Config(
-                # Aggressive connection pooling
-                max_pool_connections=500,
-                # Retry configuration
-                retries={
-                    "max_attempts": 3,
-                    "mode": "adaptive",  # Adaptive retry mode
-                },
-                # S3-specific optimizations
-                s3={
-                    "use_accelerate_endpoint": False,
-                    "payload_signing_enabled": False,  # Disable for better performance
-                },
-                # TCP settings (if supported)
-                tcp_keepalive=True,
+        
+        # Verify botocore CRT support (optional check)
+        # Note: CRT support in botocore is automatically enabled if awscrt is installed
+        if self._has_crt:
+            try:
+                # Try to verify CRT is actually being used
+                # This is a best-effort check - CRT may still work even if this fails
+                import botocore
+                logger.info(f"✓ botocore version: {botocore.__version__}")
+                logger.info("✓ CRT should be enabled (awscrt is installed)")
+            except Exception:
+                pass
+        
+        # Single source of truth for config
+        self._config = self._create_config()
+        
+        # Setup session
+        self.session = aioboto3.Session(
+            aws_access_key_id=credentials.get("access_key_id"),
+            aws_secret_access_key=credentials.get("secret_access_key"),
+            region_name=credentials.get("region_name", "auto"),
+        )
+        
+        self.client = None
+        
+        # Performance metrics
+        self._metrics = {
+            'total_downloads': 0,
+            'successful_downloads': 0,
+            'failed_downloads': 0,
+            'total_bytes': 0,
+            'total_latency_ms': 0,
+        }
+        self._metrics_lock = asyncio.Lock()
+        
+        # Connection monitoring
+        self._download_count = 0
+        self._last_conn_check = 0
+        
+        logger.info(
+            f"Initialized async storage for {endpoint} "
+            f"(max_pool_connections={self._config.max_pool_connections})"
+        )
+    
+    def _create_config(self) -> Config:
+        """Create optimized boto3 config with CRT support."""
+        # Calculate required connections
+        # With MAX_CONCURRENCY workers × 3 pipeline depth = potential concurrent requests
+        optimal_pool_size = MAX_CONCURRENCY * 3 + 100
+        actual_pool_size = min(optimal_pool_size, 2000)  # Cap at 2000
+        
+        if optimal_pool_size > 2000:
+            logger.warning(
+                f"Requested pool size ({optimal_pool_size}) exceeds maximum (2000). "
+                f"Consider reducing MAX_CONCURRENCY from {MAX_CONCURRENCY} to ~600"
             )
-
-            logger.info(
-                f"Initialized async session for {self.endpoint} with max_pool_connections=500"
-            )
-            logger.info("CRT support: enabled (awscrt required)")
-
-        except Exception as e:
-            logger.error(f"Failed to initialize async session: {e}")
-            raise
+        
+        config = Config(
+            # Scale connection pool to actual concurrency
+            max_pool_connections=actual_pool_size,
+            
+            # Connection timeouts
+            connect_timeout=5,
+            read_timeout=60,  # Longer timeout for 100MB chunks
+            
+            # Adaptive retry strategy
+            retries={
+                'max_attempts': 3,
+                'mode': 'adaptive',
+            },
+            
+            # S3-specific optimizations
+            s3={
+                'use_accelerate_endpoint': False,
+                'payload_signing_enabled': False,  # Skip signing overhead
+                'addressing_style': 'virtual',  # or 'path' for R2
+            },
+            
+            # TCP keep-alive
+            tcp_keepalive=True,
+        )
+        
+        logger.info(f"Configured connection pool: {config.max_pool_connections} connections")
+        return config
 
     async def __aenter__(self):
         """Async context manager entry."""
-        config = Config(
-            max_pool_connections=500,
-            retries={"max_attempts": 3, "mode": "adaptive"},
-            s3={"use_accelerate_endpoint": False, "payload_signing_enabled": False},
-            tcp_keepalive=True,
-        )
+        # Reuse the single config instance
         self.client = await self.session.client(
             "s3",
             endpoint_url=self.endpoint,
-            config=config,
+            config=self._config,  # Use existing config
         ).__aenter__()
         return self
 
@@ -85,11 +145,27 @@ class ObjectStorageSystem:
         if self.client:
             await self.client.__aexit__(exc_type, exc_val, exc_tb)
             self.client = None
+    
+    def get_connection_count(self) -> int:
+        """Get number of established connections for this process."""
+        if not HAS_PSUTIL:
+            return -1
+        
+        try:
+            process = psutil.Process(os.getpid())
+            connections = process.connections(kind='inet')
+            established = [c for c in connections if c.status == 'ESTABLISHED']
+            return len(established)
+        except Exception as e:
+            logger.debug(f"Failed to get connection count: {e}")
+            return -1
 
     async def download_range(
         self, key: str, start: int, length: int
     ) -> Tuple[Optional[bytes], float]:
-        """Download a range of an object asynchronously and return (data, latency_ms).
+        """Download a range of an object asynchronously with request-level timeouts.
+        
+        Returns (data, latency_ms). Data is None on failure.
 
         Args:
             key: Object key
@@ -102,37 +178,144 @@ class ObjectStorageSystem:
         if not self.client:
             raise RuntimeError("Storage client not initialized. Use async context manager.")
 
+        # Monitor connections every 100 downloads
+        self._download_count += 1
+        if self._download_count % 100 == 0:
+            conn_count = self.get_connection_count()
+            logger.info(
+                f"Downloads: {self._download_count}, "
+                f"Active connections: {conn_count}"
+            )
+
         try:
             start_time = time.time()
             range_header = f"bytes={start}-{start + length - 1}"
-
-            response = await self.client.get_object(
-                Bucket=self.bucket_name,
-                Key=key,
-                Range=range_header,
+            
+            # Add timeout wrapper around entire request
+            response = await asyncio.wait_for(
+                self.client.get_object(
+                    Bucket=self.bucket_name,
+                    Key=key,
+                    Range=range_header,
+                ),
+                timeout=30.0  # 30s timeout for request
             )
-
-            # Read body asynchronously
+            
+            # Read body with timeout
             body = response["Body"]
-            data = await body.read()
+            data = await asyncio.wait_for(
+                body.read(),
+                timeout=30.0  # Additional 30s for reading body
+            )
+            
             latency_ms = (time.time() - start_time) * 1000
-
+            
+            # Validate we got expected amount of data
+            if len(data) != length:
+                logger.warning(
+                    f"Incomplete read: expected {length} bytes, got {len(data)} bytes"
+                )
+            
+            # Update metrics
+            async with self._metrics_lock:
+                self._metrics['total_downloads'] += 1
+                self._metrics['successful_downloads'] += 1
+                self._metrics['total_bytes'] += len(data)
+                self._metrics['total_latency_ms'] += latency_ms
+            
             return data, latency_ms
 
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"Timeout downloading {key} range {start}-{start+length-1} "
+                f"(download #{self._download_count})"
+            )
+            async with self._metrics_lock:
+                self._metrics['total_downloads'] += 1
+                self._metrics['failed_downloads'] += 1
+            return None, 0
+        
         except IncompleteRead as e:
             logger.debug(f"IncompleteRead for {key} range {start}-{start + length - 1}: {e}")
+            async with self._metrics_lock:
+                self._metrics['total_downloads'] += 1
+                self._metrics['failed_downloads'] += 1
             return None, 0
+        
         except ReadTimeoutError as e:
             logger.debug(f"Read timeout for {key} range {start}-{start + length - 1}: {e}")
+            async with self._metrics_lock:
+                self._metrics['total_downloads'] += 1
+                self._metrics['failed_downloads'] += 1
             return None, 0
+        
         except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            status_code = e.response.get('ResponseMetadata', {}).get('HTTPStatusCode', 0)
             logger.error(
-                f"Failed to download range {start}-{start + length - 1} from {key}: {e}"
+                f"S3 error {error_code} (HTTP {status_code}) for {key} "
+                f"range {start}-{start+length-1}"
             )
+            async with self._metrics_lock:
+                self._metrics['total_downloads'] += 1
+                self._metrics['failed_downloads'] += 1
             return None, 0
+        
         except Exception as e:
-            logger.error(f"Unexpected error downloading range from {key}: {e}")
+            logger.error(
+                f"Unexpected error downloading {key} range {start}-{start+length-1}: {e}",
+                exc_info=True
+            )
+            async with self._metrics_lock:
+                self._metrics['total_downloads'] += 1
+                self._metrics['failed_downloads'] += 1
             return None, 0
+    
+    async def verify_connection(self) -> bool:
+        """Verify storage connection and configuration."""
+        if not self.client:
+            logger.error("Client not initialized. Use async context manager.")
+            return False
+        
+        try:
+            logger.info("Verifying storage connection...")
+            
+            # Test bucket access
+            await self.client.head_bucket(Bucket=self.bucket_name)
+            logger.info(f"✓ Successfully connected to bucket: {self.bucket_name}")
+            
+            # Log configuration
+            logger.info(f"✓ Endpoint: {self.endpoint}")
+            logger.info(f"✓ Max pool connections: {self._config.max_pool_connections}")
+            logger.info(f"✓ CRT support: {'enabled' if self._has_crt else 'DISABLED (performance limited!)'}")
+            
+            # Check current connections
+            conn_count = self.get_connection_count()
+            if conn_count >= 0:
+                logger.info(f"✓ Current established connections: {conn_count}")
+            else:
+                logger.info("✓ Connection monitoring: unavailable (psutil not installed)")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"✗ Connection verification failed: {e}")
+            return False
+    
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get performance metrics."""
+        metrics = self._metrics.copy()
+        if metrics['successful_downloads'] > 0:
+            metrics['avg_latency_ms'] = (
+                metrics['total_latency_ms'] / metrics['successful_downloads']
+            )
+            metrics['success_rate'] = (
+                metrics['successful_downloads'] / metrics['total_downloads']
+            )
+        else:
+            metrics['avg_latency_ms'] = 0
+            metrics['success_rate'] = 0
+        return metrics
 
     async def upload_object_streaming(
         self, key: str, data_generator, total_size: int, max_workers: int = 4
@@ -306,3 +489,73 @@ class ObjectStorageSystem:
         except Exception as e:
             logger.error(f"Failed to upload part {part_number}: {e}")
             return None
+
+
+def verify_setup() -> bool:
+    """Verify CRT and configuration before benchmark.
+    
+    Returns:
+        True if setup is correct, False otherwise
+    """
+    print("=" * 60)
+    print("PERFORMANCE SETUP VERIFICATION")
+    print("=" * 60)
+    
+    all_ok = True
+    
+    # 1. Check CRT
+    try:
+        import awscrt
+        print(f"✓ AWS CRT installed: version {awscrt.__version__}")
+    except ImportError:
+        print("✗ AWS CRT NOT INSTALLED - CRITICAL PERFORMANCE ISSUE!")
+        print("  Install with: pip install awscrt 'botocore[crt]'")
+        all_ok = False
+    
+    # 2. Check botocore version
+    try:
+        import botocore
+        print(f"✓ botocore version: {botocore.__version__}")
+        # CRT support is automatically enabled if awscrt is installed
+        if all_ok:  # Only show this if CRT is installed
+            print("✓ botocore CRT support: should be enabled (awscrt is installed)")
+    except ImportError:
+        print("✗ botocore not installed")
+        all_ok = False
+    
+    # 3. Check aioboto3
+    try:
+        import aioboto3
+        print(f"✓ aioboto3 installed")
+    except ImportError:
+        print("✗ aioboto3 not installed")
+        all_ok = False
+    
+    # 4. Check psutil for monitoring
+    try:
+        import psutil
+        print(f"✓ psutil available for connection monitoring")
+    except ImportError:
+        print("⚠ psutil not available (optional, for monitoring)")
+        print("  Install with: pip install psutil")
+    
+    # 5. Configuration check
+    try:
+        from configuration import MAX_CONCURRENCY
+        optimal_pool = MAX_CONCURRENCY * 3 + 100
+        actual_pool = min(optimal_pool, 2000)
+        print(f"✓ MAX_CONCURRENCY: {MAX_CONCURRENCY}")
+        print(f"✓ Optimal pool size: {actual_pool}")
+        if optimal_pool > 2000:
+            print(f"⚠ Pool size capped at 2000 (requested {optimal_pool})")
+    except ImportError as e:
+        print(f"⚠ Could not import configuration: {e}")
+    
+    print("=" * 60)
+    
+    if not all_ok:
+        print("\n⚠️ Setup verification failed. Fix issues before benchmarking.")
+    else:
+        print("\n✓ Setup verification passed. Ready for benchmarking.")
+    
+    return all_ok
