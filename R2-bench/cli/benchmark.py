@@ -121,32 +121,7 @@ class BenchmarkRunner:
                 logger.info(f"Test object found: {response['ContentLength']} bytes")
             except Exception as e:
                 logger.warning(f"Test object not found or error accessing it: {e}")
-                logger.info(
-                    "Attempting to create a smaller test object for more reliable testing..."
-                )
-
-                # Try to create a smaller test object (1GB instead of 9GB)
-                try:
-                    from cli.uploader import Uploader
-
-                    uploader = Uploader(self.storage_type)
-                    success = await uploader.upload_test_object(
-                        size_gb=1, object_key="test-object-1gb"
-                    )
-                    if success:
-                        self.object_key = "test-object-1gb"
-                        logger.info(
-                            "Successfully created 1GB test object, using it for benchmarking"
-                        )
-                    else:
-                        logger.error("Failed to create test object")
-                        raise
-                except Exception as upload_error:
-                    logger.error(f"Failed to create test object: {upload_error}")
-                    logger.error(
-                        "Please run 'python cli.py upload --storage r2' first to create the test object"
-                    )
-                    raise
+                return
 
             try:
                 # Phase 1: Warm-up using WarmUp class with shared worker pool

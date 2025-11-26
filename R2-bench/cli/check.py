@@ -120,9 +120,6 @@ class CapacityChecker:
                 logger.info(f"Test object found: {response['ContentLength']} bytes")
             except Exception as e:
                 logger.warning(f"Test object not found or error accessing it: {e}")
-                logger.info(
-                    "Attempting to create a smaller test object for more reliable testing..."
-                )
                 return
 
             try:

@@ -6,6 +6,7 @@ import asyncio
 import time
 import logging
 import random
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional
 from persistence.record import BenchmarkRecord
 from persistence.parquet import ParquetPersistence
@@ -63,6 +64,12 @@ class WorkerPool:
         # Async persistence queue
         self.persistence_queue: asyncio.Queue = asyncio.Queue(maxsize=10000)
         self.persistence_task: Optional[asyncio.Task] = None
+
+        # Dedicated executor for persistence I/O (prevents bottleneck)
+        self._persistence_executor = ThreadPoolExecutor(
+            max_workers=4,
+            thread_name_prefix="persistence"
+        )
 
         logger.info(
             f"Initialized WorkerPool with max {max_workers} workers, "
@@ -191,9 +198,17 @@ class WorkerPool:
                 # Wait for at least one task to complete
                 if in_flight_tasks:
                     done, pending = await asyncio.wait(
-                        in_flight_tasks, return_when=asyncio.FIRST_COMPLETED
+                        in_flight_tasks,
+                        return_when=asyncio.FIRST_COMPLETED,
+                        timeout=60.0  # 60s timeout to detect hangs
                     )
                     in_flight_tasks = list(pending)
+                    
+                    # Warn if timeout with no completions
+                    if not done and in_flight_tasks:
+                        logger.warning(
+                            f"Worker {worker_id} timeout: {len(in_flight_tasks)} tasks still pending"
+                        )
 
                     # Process completed tasks
                     for task in done:
@@ -364,10 +379,12 @@ class WorkerPool:
         if not batch:
             return
 
-        # Run synchronous persistence in executor to avoid blocking event loop
+        # Run synchronous persistence in dedicated executor to avoid blocking event loop
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(
-            None, self._sync_flush_batch, batch.copy()
+            self._persistence_executor,
+            self._sync_flush_batch,
+            batch  # No copy needed - executor handles thread safety
         )
 
     def _sync_flush_batch(self, batch: List[BenchmarkRecord]):
@@ -489,4 +506,9 @@ class WorkerPool:
     async def cleanup(self):
         """Clean up the worker pool."""
         await self.stop_workers()
+        
+        # Shutdown persistence executor
+        if hasattr(self, '_persistence_executor'):
+            self._persistence_executor.shutdown(wait=True)
+        
         logger.info("Worker pool cleaned up")
