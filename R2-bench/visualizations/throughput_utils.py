@@ -4,6 +4,12 @@ Shared utilities for throughput calculations with prorating across phases and ti
 
 import pandas as pd
 import logging
+import sys
+import os
+
+# Add parent directory to path for configuration import
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from configuration import BITS_PER_BYTE, MEGABITS_PER_MB
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +129,9 @@ def calculate_phase_throughput_with_prorating(
                 total_bytes += prorated_bytes
                 request_count += 1
     
-    # Calculate throughput
-    throughput_mbps = (total_bytes * 8) / (phase_duration * 1_000_000) if phase_duration > 0 else 0
+    # Calculate throughput in megabits per second (Mbps)
+    # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
+    throughput_mbps = (total_bytes * BITS_PER_BYTE) / (phase_duration * MEGABITS_PER_MB) if phase_duration > 0 else 0
     
     return {
         'total_bytes': total_bytes,
@@ -217,8 +224,9 @@ def prorate_bytes_to_time_windows(
                 total_bytes += prorated_bytes
                 request_count += 1
         
-        # Calculate throughput in Mbps for this window
-        throughput_mbps = (total_bytes * 8) / (window_size_seconds * 1_000_000)
+        # Calculate throughput in megabits per second (Mbps) for this window
+        # Formula: (bytes * BITS_PER_BYTE) / (window_size_seconds * MEGABITS_PER_MB)
+        throughput_mbps = (total_bytes * BITS_PER_BYTE) / (window_size_seconds * MEGABITS_PER_MB)
         
         # Determine which phase this window belongs to based on phase boundaries
         # Use the phase that contains the majority of this window

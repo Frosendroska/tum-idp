@@ -135,7 +135,7 @@ benchmark
 
 ## Metrics Captured
 
-- Throughput (MiB/s, GiB/s) – aggregated per-second.
+- Throughput (Mbps - megabits per second) – aggregated per-second. Note: All throughput values are in megabits per second (Mbps), not megabytes per second (MB/s). To convert: 1 MB/s = 8 Mbps.
 - Latency – p50/p90/p95/p99 per GET (socket-open → last byte).
 - QPS / IOPS – requests per second.
 - Error Rates – HTTP 429/5xx, timeouts, retries (with exponential back-off).

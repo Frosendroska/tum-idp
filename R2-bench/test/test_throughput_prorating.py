@@ -155,7 +155,7 @@ def test_prorating_time_windows():
     assert len(result) == 100
     
     # Each window should have 1/100 of the bytes = 10 bytes
-    # Throughput per second: (10 bytes * 8 bits) / 1_000_000 = 0.00008 Mbps
+    # Throughput per second in megabits per second (Mbps): (10 bytes * BITS_PER_BYTE) / MEGABITS_PER_MB = 0.00008 Mbps
     assert all(abs(row['total_bytes'] - 10.0) < 0.01 for _, row in result.iterrows())
 
 
