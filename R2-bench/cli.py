@@ -11,8 +11,8 @@ import asyncio
 import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-# Add the current directory to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# This file is at the project root, so imports work directly
+# No sys.path manipulation needed
 
 from configuration import (
     OBJECT_SIZE_GB, STEADY_STATE_HOURS, DEFAULT_OBJECT_KEY,

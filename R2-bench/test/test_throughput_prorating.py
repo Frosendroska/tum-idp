@@ -9,7 +9,7 @@ import pandas as pd
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from common.throughput_utils import (
+from common.metrics_utils import (
     get_phase_boundaries,
     calculate_phase_throughput_with_prorating,
     prorate_bytes_to_time_windows

@@ -21,8 +21,14 @@ from configuration import (
     OBJECT_SIZE_GB,
     BITS_PER_BYTE,
     GIGABITS_PER_GB,
+    DEFAULT_MAX_WORKERS,
+    DEFAULT_PERSISTENCE_BATCH_SIZE,
+    PERSISTENCE_FLUSH_INTERVAL_SECONDS,
 )
-from common.throughput_utils import calculate_phase_throughput_with_prorating
+from common.metrics_utils import (
+    calculate_phase_throughput_with_prorating,
+    calculate_latency_stats
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,24 +40,24 @@ class WorkerPool:
         self,
         storage_system,
         persistence: ParquetPersistence,
-        max_workers: int = 500,
+        max_workers: int = None,
         pipeline_depth: int = 3,
-        persistence_batch_size: int = 100,
+        persistence_batch_size: int = None,
     ):
         """Initialize the async worker pool.
 
         Args:
             storage_system: Async storage system to use for downloads
             persistence: Persistence object to store benchmark records
-            max_workers: Maximum number of concurrent workers
+            max_workers: Maximum number of concurrent workers (default: from configuration)
             pipeline_depth: Number of in-flight requests per worker (pipelining)
-            persistence_batch_size: Number of records to batch before writing
+            persistence_batch_size: Number of records to batch before writing (default: from configuration)
         """
         self.storage_system = storage_system
         self.persistence = persistence
-        self.max_workers = max_workers
+        self.max_workers = max_workers or DEFAULT_MAX_WORKERS
         self.pipeline_depth = pipeline_depth
-        self.persistence_batch_size = persistence_batch_size
+        self.persistence_batch_size = persistence_batch_size or DEFAULT_PERSISTENCE_BATCH_SIZE
 
         # Worker management
         self.worker_tasks: List[asyncio.Task] = []
@@ -307,12 +313,13 @@ class WorkerPool:
             # Download range with retry logic
             data = None
             latency_ms = 0
+            rtt_ms = 0
             http_status = 500
             retry_count = 0
 
             while retry_count < MAX_RETRIES:
                 try:
-                    data, latency_ms = await self.storage_system.download_range(
+                    data, latency_ms, rtt_ms = await self.storage_system.download_range(
                         object_key, range_start, range_length
                     )
                     if data and len(data) > 0:
@@ -349,6 +356,7 @@ class WorkerPool:
                 range_len=range_length,
                 bytes_downloaded=bytes_downloaded,
                 latency_ms=latency_ms,
+                rtt_ms=rtt_ms,
                 http_status=http_status,
                 concurrency=self.active_workers,
                 phase_id=phase_id,
@@ -374,7 +382,7 @@ class WorkerPool:
         """Background task that processes persistence queue with batching."""
         batch = []
         last_flush = time.time()
-        flush_interval = 1.0  # Flush every second even if batch not full
+        flush_interval = PERSISTENCE_FLUSH_INTERVAL_SECONDS
 
         try:
             while not self.stop_event.is_set() or not self.persistence_queue.empty():
@@ -432,32 +440,8 @@ class WorkerPool:
         if not all_records:
             return None
 
-        # Get records that started in this phase (for latency/concurrency stats)
-        phase_records = [r for r in all_records if r.phase_id == phase_id]
-
-        # Calculate basic statistics from records that started in this phase
-        total_requests = len(phase_records)
-        successful_requests = len(
-            [r for r in phase_records if r.http_status == 200]
-        )
-        error_requests = total_requests - successful_requests
-        error_rate = error_requests / total_requests if total_requests > 0 else 0
-
-        # Calculate latency statistics from records that started in this phase
-        latencies = [r.latency_ms for r in phase_records if r.http_status == 200]
-        avg_latency = sum(latencies) / len(latencies) if latencies else 0
-
-        # Calculate percentile latencies
-        if latencies:
-            sorted_latencies = sorted(latencies)
-            n = len(sorted_latencies)
-            p50_latency = sorted_latencies[int(0.5 * n)] if n > 0 else 0
-            p95_latency = sorted_latencies[int(0.95 * n)] if n > 0 else 0
-            p99_latency = sorted_latencies[int(0.99 * n)] if n > 0 else 0
-        else:
-            p50_latency = p95_latency = p99_latency = 0
-
-        # Convert records to DataFrame for shared throughput calculation utilities
+        # Convert records to DataFrame FIRST - this is our single source of truth
+        # Both throughput and latency/RTT stats will use the same DataFrame
         records_data = []
         for record in all_records:
             records_data.append({
@@ -468,6 +452,7 @@ class WorkerPool:
                 'range_len': record.range_len,
                 'bytes': record.bytes,
                 'latency_ms': record.latency_ms,
+                'rtt_ms': record.rtt_ms,
                 'http_status': record.http_status,
                 'concurrency': record.concurrency,
                 'phase_id': record.phase_id,
@@ -476,6 +461,29 @@ class WorkerPool:
             })
         
         records_df = pd.DataFrame(records_data)
+        
+        # Get records that started in this phase (for basic stats and latency/RTT)
+        phase_data = records_df[records_df['phase_id'] == phase_id]
+        
+        # Calculate basic statistics from records that started in this phase
+        total_requests = len(phase_data)
+        successful_requests = len(phase_data[phase_data['http_status'] == 200])
+        error_requests = total_requests - successful_requests
+        error_rate = error_requests / total_requests if total_requests > 0 else 0
+        
+        # Calculate latency statistics using shared utility (DataFrame-based)
+        latency_stats = calculate_latency_stats(phase_data, latency_col='latency_ms')
+        avg_latency = latency_stats['avg']
+        p50_latency = latency_stats['p50']
+        p95_latency = latency_stats['p95']
+        p99_latency = latency_stats['p99']
+        
+        # Calculate RTT statistics using shared utility (DataFrame-based)
+        rtt_stats = calculate_latency_stats(phase_data, latency_col='rtt_ms')
+        avg_rtt = rtt_stats['avg']
+        p50_rtt = rtt_stats['p50']
+        p95_rtt = rtt_stats['p95']
+        p99_rtt = rtt_stats['p99']
         
         # Use shared throughput calculation utility with prorating
         # This handles requests that span phase boundaries correctly
@@ -493,7 +501,7 @@ class WorkerPool:
 
         return {
             "phase_id": phase_id,
-            "concurrency": phase_records[0].concurrency if phase_records else 0,
+            "concurrency": phase_data['concurrency'].iloc[0] if len(phase_data) > 0 else 0,
             "total_requests": total_requests,
             "successful_requests": successful_requests,
             "error_requests": error_requests,
@@ -503,7 +511,14 @@ class WorkerPool:
             "p50_latency_ms": p50_latency,
             "p95_latency_ms": p95_latency,
             "p99_latency_ms": p99_latency,
+            "avg_rtt_ms": avg_rtt,
+            "p50_rtt_ms": p50_rtt,
+            "p95_rtt_ms": p95_rtt,
+            "p99_rtt_ms": p99_rtt,
             "total_bytes": total_bytes,
+            "prorated_request_count": prorated_request_count,
+            "phase_start": phase_start,
+            "phase_end": phase_end,
             "duration_seconds": phase_duration,
         }
 

@@ -7,17 +7,10 @@ import time
 import logging
 from typing import Dict, Any
 from configuration import (
-    DEFAULT_OBJECT_KEY,
-    RAMP_STEP_MINUTES,
-    RAMP_STEP_CONCURRENCY,
-    SYSTEM_BANDWIDTH_GBPS,
-    PLATEAU_THRESHOLD,
     MAX_ERROR_RATE,
     MIN_REQUESTS_FOR_ERROR_CHECK,
-    MAX_CONSECUTIVE_ERRORS,
-    MAX_RETRIES,
-    MAX_CONCURRENCY,
     PROGRESS_INTERVAL,
+    DEFAULT_MAX_CONCURRENCY_RAMP,
 )
 from algorithms.plateau_check import PlateauCheck
 from common.worker_pool import WorkerPool
@@ -108,8 +101,10 @@ class Ramp:
 
         return step_stats
 
-    async def find_optimal_concurrency(self, max_concurrency: int = 100):
+    async def find_optimal_concurrency(self, max_concurrency: int = None):
         """Find optimal concurrency by ramping up until plateau is reached."""
+        if max_concurrency is None:
+            max_concurrency = DEFAULT_MAX_CONCURRENCY_RAMP
         current_concurrency = self.initial_concurrency
         best_throughput = 0
         best_concurrency = current_concurrency

@@ -33,9 +33,9 @@ class BenchmarkVisualizer:
         
         # Initialize modular plotters
         if self.data is not None:
-            self.throughput_plotter = ThroughputPlotter(self.data, self.output_dir)
-            self.latency_plotter = LatencyPlotter(self.data, self.output_dir)
-            self.dashboard_plotter = DashboardPlotter(self.data, self.output_dir)
+            self.throughput_plotter = ThroughputPlotter(self.data, self.output_dir, self.parquet_file)
+            self.latency_plotter = LatencyPlotter(self.data, self.output_dir, self.parquet_file)
+            self.dashboard_plotter = DashboardPlotter(self.data, self.output_dir, self.parquet_file)
         else:
             self.throughput_plotter = None
             self.latency_plotter = None

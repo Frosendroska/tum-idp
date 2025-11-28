@@ -42,6 +42,7 @@ class ParquetPersistence:
                 'range_len': record.range_len,
                 'bytes': record.bytes,
                 'latency_ms': record.latency_ms,
+                'rtt_ms': record.rtt_ms,
                 'http_status': record.http_status,
                 'concurrency': record.concurrency,
                 'phase_id': record.phase_id,

@@ -69,3 +69,15 @@ BITS_PER_BYTE = 8
 GIGABITS_PER_GB = 1_000_000_000  # 1 Gigabit = 1,000,000,000 bits
 SECONDS_PER_HOUR = 3600
 SECONDS_PER_MINUTE = 60
+
+# Visualization configuration
+THROUGHPUT_WINDOW_SIZE_SECONDS = 30.0  # Window size for throughput timeline plots
+PER_SECOND_WINDOW_SIZE_SECONDS = 1.0  # Window size for per-second throughput calculations
+
+# Worker pool defaults
+DEFAULT_MAX_WORKERS = 500  # Default maximum number of workers
+DEFAULT_PERSISTENCE_BATCH_SIZE = 100  # Default batch size for persistence
+PERSISTENCE_FLUSH_INTERVAL_SECONDS = 1.0  # Flush interval for persistence queue
+
+# Algorithm defaults
+DEFAULT_MAX_CONCURRENCY_RAMP = 100  # Default max concurrency for ramp algorithm
