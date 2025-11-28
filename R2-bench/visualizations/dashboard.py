@@ -6,6 +6,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import logging
 import os
+import sys
+
+# Add parent directory to path for configuration import
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from configuration import BITS_PER_BYTE, MEGABITS_PER_MB, BYTES_PER_GB
 
 from .base import BasePlotter
 from .throughput_utils import (
@@ -39,8 +44,9 @@ class DashboardPlotter(BasePlotter):
             end_time = self.data['end_ts'].max()
             duration = end_time - start_time
             
-            # Calculate throughput
-            throughput_mbps = (total_bytes * 8) / (duration * 1_000_000) if duration > 0 else 0
+            # Calculate throughput in megabits per second (Mbps)
+            # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
+            throughput_mbps = (total_bytes * BITS_PER_BYTE) / (duration * MEGABITS_PER_MB) if duration > 0 else 0
             
             # Calculate latency statistics
             successful_data = self.filter_successful_requests()
@@ -63,7 +69,7 @@ Successful Requests: {successful_requests:,}
 Success Rate: {success_rate:.2%}
 
 Duration: {duration/3600:.2f} hours
-Total Data: {total_bytes/(1024**3):.2f} GB
+Total Data: {total_bytes/BYTES_PER_GB:.2f} GB
 Average Throughput: {throughput_mbps:.1f} Mbps
 
 Latency Statistics (ms):
@@ -161,7 +167,9 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             concurrency_stats.columns = ['concurrency', 'total_bytes', 'start_time', 'end_time']
             
             concurrency_stats['duration_seconds'] = concurrency_stats['end_time'] - concurrency_stats['start_time']
-            concurrency_stats['throughput_mbps'] = (concurrency_stats['total_bytes'] * 8) / (concurrency_stats['duration_seconds'] * 1_000_000)
+            # Calculate throughput in megabits per second (Mbps)
+            # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
+            concurrency_stats['throughput_mbps'] = (concurrency_stats['total_bytes'] * BITS_PER_BYTE) / (concurrency_stats['duration_seconds'] * MEGABITS_PER_MB)
             
             ax3.plot(concurrency_stats['concurrency'], concurrency_stats['throughput_mbps'], 
                     marker='o', linewidth=2, markersize=8, color='blue')
@@ -225,7 +233,9 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             # Calculate key metrics using start_ts/end_ts
             total_duration = self.data['end_ts'].max() - self.data['start_ts'].min()
             total_bytes = successful_data['bytes'].sum()
-            avg_throughput = (total_bytes * 8) / (total_duration * 1_000_000)
+            # Calculate throughput in megabits per second (Mbps)
+            # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
+            avg_throughput = (total_bytes * BITS_PER_BYTE) / (total_duration * MEGABITS_PER_MB)
             avg_latency = successful_data['latency_ms'].mean()
             p95_latency = successful_data['latency_ms'].quantile(0.95)
             p99_latency = successful_data['latency_ms'].quantile(0.99)
@@ -234,7 +244,7 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             KEY PERFORMANCE METRICS
             ========================
             Total Duration: {total_duration/3600:.2f} hours
-            Total Data Transferred: {total_bytes/(1024**3):.2f} GB
+            Total Data Transferred: {total_bytes/BYTES_PER_GB:.2f} GB
             Average Throughput: {avg_throughput:.1f} Mbps
             Average Latency: {avg_latency:.1f} ms
             P95 Latency: {p95_latency:.1f} ms

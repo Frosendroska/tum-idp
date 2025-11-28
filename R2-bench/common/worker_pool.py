@@ -18,6 +18,8 @@ from configuration import (
     MAX_CONSECUTIVE_ERRORS,
     PROGRESS_INTERVAL,
     OBJECT_SIZE_GB,
+    BITS_PER_BYTE,
+    MEGABITS_PER_MB,
 )
 
 logger = logging.getLogger(__name__)
@@ -457,9 +459,10 @@ class WorkerPool:
                     total_bytes += prorated_bytes
                     prorated_request_count += 1
 
-        # Calculate throughput using prorated bytes
+        # Calculate throughput in megabits per second (Mbps) using prorated bytes
+        # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
         throughput_mbps = (
-            (total_bytes * 8) / (phase_duration * 1_000_000)
+            (total_bytes * BITS_PER_BYTE) / (phase_duration * MEGABITS_PER_MB)
             if phase_duration > 0
             else 0
         )

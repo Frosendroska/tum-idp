@@ -3,7 +3,7 @@ S3 vs R2 Performance Comparison
 
 r5.xlarge
 ====================================================================================================
-Phase        Concurrency    S3 Throughput (MB/s)    R2 Throughput (MB/s)    S3 Latency (ms)    R2 Latency (ms)
+Phase        Concurrency    S3 Throughput (Mbps)    R2 Throughput (Mbps)    S3 Latency (ms)    R2 Latency (ms)
 ----------------------------------------------------------------------------------------------------
 warmup       8              5437.52                 4315.13                 1237.9            1567.3
 ramp_1       8              4725.47                 4424.23                 1395.7            1503.5
@@ -13,7 +13,7 @@ ramp_4       -              -                       5772.15                 -   
 
 c5n.9xlarge
 ====================================================================================================
-Phase        Concurrency    S3 Throughput (MB/s)    R2 Throughput (MB/s)    S3 Latency (ms)    R2 Latency (ms)
+Phase        Concurrency    S3 Throughput (Mbps)    R2 Throughput (Mbps)    S3 Latency (ms)    R2 Latency (ms)
 ----------------------------------------------------------------------------------------------------
 warmup       8              6006.57                 4673.78                 1125.1            1438.0
 ramp_1       8              5925.49                 3792.27                 1124.7            1755.0
@@ -23,7 +23,7 @@ ramp_4       104            8706.59                 9711.35                 9958
 
 c6in.16xlarge
 ====================================================================================================
-Phase        Concurrency    S3 Throughput (MB/s)    R2 Throughput (MB/s)    S3 Latency (ms)    R2 Latency (ms)
+Phase        Concurrency    S3 Throughput (Mbps)    R2 Throughput (Mbps)    S3 Latency (ms)    R2 Latency (ms)
 ----------------------------------------------------------------------------------------------------
 warmup       8              6139.58                 5198.37                 1105.5            1304.4
 ramp_1       8              6065.04                 5049.59                 1101.6            1324.9
@@ -33,7 +33,7 @@ ramp_4       104            13216.54                15313.51                6593
 
 hpc7a.12xlarge (S3) vs hpc7g.16xlarge (R2)
 ====================================================================================================
-Phase        Concurrency    S3 Throughput (MB/s)    R2 Throughput (MB/s)    S3 Latency (ms)    R2 Latency (ms)
+Phase        Concurrency    S3 Throughput (Mbps)    R2 Throughput (Mbps)    S3 Latency (ms)    R2 Latency (ms)
 ----------------------------------------------------------------------------------------------------
 warmup       8              5939.29                 4514.45                 1134.5            1488.8
 ramp_1       8              5838.47                 4530.14                 1138.7            1474.3

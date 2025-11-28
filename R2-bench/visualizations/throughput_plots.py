@@ -7,6 +7,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import logging
 import os
+import sys
+
+# Add parent directory to path for configuration import
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from configuration import BITS_PER_BYTE, MEGABITS_PER_MB, BYTES_PER_GB
 
 from .base import BasePlotter
 from .throughput_utils import (
@@ -199,9 +204,10 @@ class ThroughputPlotter(BasePlotter):
             concurrency_stats.columns = ['concurrency', 'total_bytes', 'avg_latency', 'latency_std', 
                                         'request_count', 'start_time', 'end_time']
             
-            # Calculate throughput for each concurrency level
+            # Calculate throughput for each concurrency level in megabits per second (Mbps)
+            # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
             concurrency_stats['duration_seconds'] = concurrency_stats['end_time'] - concurrency_stats['start_time']
-            concurrency_stats['throughput_mbps'] = (concurrency_stats['total_bytes'] * 8) / (concurrency_stats['duration_seconds'] * 1_000_000)
+            concurrency_stats['throughput_mbps'] = (concurrency_stats['total_bytes'] * BITS_PER_BYTE) / (concurrency_stats['duration_seconds'] * MEGABITS_PER_MB)
             concurrency_stats['requests_per_second'] = concurrency_stats['request_count'] / concurrency_stats['duration_seconds']
             
             # Create subplot layout
@@ -295,7 +301,7 @@ class ThroughputPlotter(BasePlotter):
                 phase_result['avg_latency'] = phase_data['latency_ms'].mean() if len(phase_data) > 0 else 0
                 phase_result['avg_concurrency'] = phase_data['concurrency'].mean() if len(phase_data) > 0 else 0
                 phase_result['requests_per_second'] = phase_result['request_count'] / phase_result['duration_seconds'] if phase_result['duration_seconds'] > 0 else 0
-                phase_result['total_gb'] = phase_result['total_bytes'] / (1024**3)
+                phase_result['total_gb'] = phase_result['total_bytes'] / BYTES_PER_GB
                 
                 phase_stats_list.append(phase_result)
             
@@ -304,7 +310,7 @@ class ThroughputPlotter(BasePlotter):
             # Create table data
             table_data = []
             headers = ['Phase', 'Duration (s)', 'Requests', 'Total Data (GB)', 
-                      'Throughput (Mbps)', 'Req/s', 'Avg Latency (ms)', 'Avg Concurrency']
+                      'Throughput (Mbps)', 'Req/s', 'Avg Latency (ms)', 'Avg Concurrency']  # Throughput in megabits per second
             
             # Define sort key function to ensure warmup comes first, then ramp steps in order, then ALL
             def phase_sort_key(phase_id):
@@ -342,7 +348,9 @@ class ThroughputPlotter(BasePlotter):
             total_bytes = successful_data['bytes'].sum()
             total_duration = successful_data['end_ts'].max() - successful_data['start_ts'].min()
             total_requests = len(successful_data)
-            overall_throughput = (total_bytes * 8) / (total_duration * 1_000_000) if total_duration > 0 else 0
+            # Calculate throughput in megabits per second (Mbps)
+            # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
+            overall_throughput = (total_bytes * BITS_PER_BYTE) / (total_duration * MEGABITS_PER_MB) if total_duration > 0 else 0
             overall_rps = total_requests / total_duration if total_duration > 0 else 0
             overall_latency = successful_data['latency_ms'].mean()
             overall_concurrency = successful_data['concurrency'].mean()
@@ -351,7 +359,7 @@ class ThroughputPlotter(BasePlotter):
                 'ALL',
                 f"{total_duration:.1f}",
                 str(total_requests),
-                f"{total_bytes / (1024**3):.3f}",
+                f"{total_bytes / BYTES_PER_GB:.3f}",
                 f"{overall_throughput:.2f}",
                 f"{overall_rps:.2f}",
                 f"{overall_latency:.1f}",
@@ -367,7 +375,7 @@ class ThroughputPlotter(BasePlotter):
                 
                 # Write headers
                 f.write(f"{'Phase':<12} {'Duration':<12} {'Requests':<12} {'Data (GB)':<12} "
-                       f"{'Throughput':<15} {'Req/s':<10} {'Latency (ms)':<15} {'Concurrency':<12}\n")
+                       f"{'Throughput (Mbps)':<20} {'Req/s':<10} {'Latency (ms)':<15} {'Concurrency':<12}\n")
                 f.write("-" * 100 + "\n")
                 
                 # Write data rows
