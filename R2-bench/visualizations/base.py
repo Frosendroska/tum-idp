@@ -11,9 +11,10 @@ logger = logging.getLogger(__name__)
 class BasePlotter:
     """Base class for all plotters with common functionality."""
     
-    def __init__(self, data: pd.DataFrame, output_dir: str):
+    def __init__(self, data: pd.DataFrame, output_dir: str, data_source: str = None):
         self.data = data
         self.output_dir = output_dir
+        self.data_source = data_source or "unknown"
     
     def filter_successful_requests(self):
         """Filter data to only include successful requests."""

@@ -13,20 +13,20 @@ import time
 import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-# Add the current directory to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure project root is in path (for running as script)
+# When run as module (python -m cli.uploader), this is not needed
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from configuration import (
     OBJECT_SIZE_GB,
-    R2_ENDPOINT,
-    S3_ENDPOINT,
     RANGE_SIZE_MB,
     R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY,
     AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY,
     AWS_REGION,
-    DEFAULT_OBJECT_KEY,
     BYTES_PER_GB,
     BYTES_PER_MB,
 )

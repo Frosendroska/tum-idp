@@ -14,8 +14,11 @@ from typing import Dict, Any
 import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-# Add the current directory to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure project root is in path (for running as script)
+# When run as module (python -m cli.benchmark), this is not needed
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
 
 from configuration import (
     WARM_UP_MINUTES,
@@ -25,9 +28,6 @@ from configuration import (
     AWS_REGION,
     R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY,
-    INITIAL_CONCURRENCY,
-    DEFAULT_OBJECT_KEY,
-    SYSTEM_BANDWIDTH_GBPS,
     MAX_CONCURRENCY,
 )
 from systems.r2 import R2System

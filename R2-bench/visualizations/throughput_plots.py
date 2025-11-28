@@ -7,19 +7,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import logging
 import os
-import sys
-
-# Add parent directory to path for configuration import
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from configuration import BYTES_PER_GB
 
 from .base import BasePlotter
-from common.throughput_utils import (
+from common.metrics_utils import (
     prorate_bytes_to_time_windows,
     calculate_phase_throughput_with_prorating,
     get_phase_boundaries,
-    calculate_throughput_gbps
+    calculate_throughput_gbps,
+    calculate_latency_stats,
+    bytes_to_gb,
+    calculate_requests_per_second
 )
+from configuration import THROUGHPUT_WINDOW_SIZE_SECONDS, PER_SECOND_WINDOW_SIZE_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +39,8 @@ class ThroughputPlotter(BasePlotter):
             start_time = self.data['start_ts'].min()
             end_time = self.data['end_ts'].max()
             
-            # Generate 30-second windows
-            window_size = 30.0
+            # Generate windows using configured window size
+            window_size = THROUGHPUT_WINDOW_SIZE_SECONDS
             window_start_times = []
             current_time = start_time
             while current_time <= end_time:
@@ -162,14 +161,14 @@ class ThroughputPlotter(BasePlotter):
             seconds.append(float(current_time))
             current_time += 1
         
-        # Use shared prorating utility
-        per_second_data = prorate_bytes_to_time_windows(
-            self.data,
-            seconds,
-            window_size_seconds=1.0,
-            start_col='start_ts',
-            end_col='end_ts'
-        )
+            # Use shared prorating utility
+            per_second_data = prorate_bytes_to_time_windows(
+                self.data,
+                seconds,
+                window_size_seconds=PER_SECOND_WINDOW_SIZE_SECONDS,
+                start_col='start_ts',
+                end_col='end_ts'
+            )
         
         if per_second_data is None or len(per_second_data) == 0:
             return None
@@ -300,10 +299,20 @@ class ThroughputPlotter(BasePlotter):
                 # Get additional stats from requests that started in this phase
                 phase_data = successful_data[successful_data['phase_id'] == phase_id]
                 phase_result['phase_id'] = phase_id
-                phase_result['avg_latency'] = phase_data['latency_ms'].mean() if len(phase_data) > 0 else 0
+                
+                # Use shared utility for latency/RTT stats (consistent with worker_pool)
+                latency_stats = calculate_latency_stats(phase_data, latency_col='latency_ms')
+                phase_result['avg_latency'] = latency_stats['avg']
+                
+                rtt_stats = calculate_latency_stats(phase_data, latency_col='rtt_ms') if 'rtt_ms' in phase_data.columns else {'avg': 0}
+                phase_result['avg_rtt'] = rtt_stats['avg']
+                
                 phase_result['avg_concurrency'] = phase_data['concurrency'].mean() if len(phase_data) > 0 else 0
-                phase_result['requests_per_second'] = phase_result['request_count'] / phase_result['duration_seconds'] if phase_result['duration_seconds'] > 0 else 0
-                phase_result['total_gb'] = phase_result['total_bytes'] / BYTES_PER_GB
+                phase_result['requests_per_second'] = calculate_requests_per_second(
+                    phase_result['request_count'], 
+                    phase_result['duration_seconds']
+                )
+                phase_result['total_gb'] = bytes_to_gb(phase_result['total_bytes'])
                 
                 phase_stats_list.append(phase_result)
             
@@ -312,7 +321,7 @@ class ThroughputPlotter(BasePlotter):
             # Create table data
             table_data = []
             headers = ['Phase', 'Duration (s)', 'Requests', 'Total Data (GB)', 
-                      'Throughput (Gbps)', 'Req/s', 'Avg Latency (ms)', 'Avg Concurrency']  # Throughput in gigabits per second
+                      'Throughput (Gbps)', 'Req/s', 'Avg Latency (ms)', 'Avg RTT (ms)', 'Avg Concurrency']  # Throughput in gigabits per second
             
             # Define sort key function to ensure warmup comes first, then ramp steps in order, then ALL
             def phase_sort_key(phase_id):
@@ -342,6 +351,7 @@ class ThroughputPlotter(BasePlotter):
                     f"{row['throughput_gbps']:.2f}",
                     f"{row['requests_per_second']:.2f}",
                     f"{row['avg_latency']:.1f}",
+                    f"{row.get('avg_rtt', 0):.1f}",
                     f"{row['avg_concurrency']:.0f}"
                 ]
                 table_data.append(table_row)
@@ -352,18 +362,25 @@ class ThroughputPlotter(BasePlotter):
             total_requests = len(successful_data)
             # Calculate throughput in gigabits per second (Gbps)
             overall_throughput = calculate_throughput_gbps(total_bytes, total_duration)
-            overall_rps = total_requests / total_duration if total_duration > 0 else 0
-            overall_latency = successful_data['latency_ms'].mean()
-            overall_concurrency = successful_data['concurrency'].mean()
+            overall_rps = calculate_requests_per_second(total_requests, total_duration)
+            # Use shared utilities for overall stats
+            overall_latency_stats = calculate_latency_stats(successful_data, latency_col='latency_ms')
+            overall_latency = overall_latency_stats['avg']
+            
+            overall_rtt_stats = calculate_latency_stats(successful_data, latency_col='rtt_ms') if 'rtt_ms' in successful_data.columns else {'avg': 0}
+            overall_rtt = overall_rtt_stats['avg']
+            
+            overall_concurrency = successful_data['concurrency'].mean() if len(successful_data) > 0 else 0
             
             summary_row = [
                 'ALL',
                 f"{total_duration:.1f}",
                 str(total_requests),
-                f"{total_bytes / BYTES_PER_GB:.3f}",
+                f"{bytes_to_gb(total_bytes):.3f}",
                 f"{overall_throughput:.2f}",
                 f"{overall_rps:.2f}",
                 f"{overall_latency:.1f}",
+                f"{overall_rtt:.1f}",
                 f"{overall_concurrency:.0f}"
             ]
             table_data.append(summary_row)
@@ -376,13 +393,13 @@ class ThroughputPlotter(BasePlotter):
                 
                 # Write headers
                 f.write(f"{'Phase':<12} {'Duration':<12} {'Requests':<12} {'Data (GB)':<12} "
-                       f"{'Throughput (Gbps)':<20} {'Req/s':<10} {'Latency (ms)':<15} {'Concurrency':<12}\n")
-                f.write("-" * 100 + "\n")
+                       f"{'Throughput (Gbps)':<20} {'Req/s':<10} {'Latency (ms)':<15} {'RTT (ms)':<12} {'Concurrency':<12}\n")
+                f.write("-" * 112 + "\n")
                 
                 # Write data rows
                 for row in table_data:
                     f.write(f"{row[0]:<12} {row[1]:<12} {row[2]:<12} {row[3]:<12} "
-                           f"{row[4]:<15} {row[5]:<10} {row[6]:<15} {row[7]:<12}\n")
+                           f"{row[4]:<15} {row[5]:<10} {row[6]:<15} {row[7]:<12} {row[8]:<12}\n")
                 
                 f.write("\n")
                 f.write(f"Total Requests: {len(successful_data):,}\n")

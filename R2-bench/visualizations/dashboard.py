@@ -6,19 +6,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import logging
 import os
-import sys
-
-# Add parent directory to path for configuration import
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from configuration import BYTES_PER_GB
 
 from .base import BasePlotter
-from common.throughput_utils import (
+from common.metrics_utils import (
     prorate_bytes_to_time_windows,
     calculate_phase_throughput_with_prorating,
     get_phase_boundaries,
-    calculate_throughput_gbps
+    calculate_throughput_gbps,
+    calculate_latency_stats,
+    bytes_to_gb
 )
+from configuration import THROUGHPUT_WINDOW_SIZE_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +46,14 @@ class DashboardPlotter(BasePlotter):
             # Calculate throughput in gigabits per second (Gbps)
             throughput_gbps = calculate_throughput_gbps(total_bytes, duration)
             
-            # Calculate latency statistics
+            # Calculate latency statistics using shared utility
             successful_data = self.filter_successful_requests()
             if successful_data is not None and len(successful_data) > 0:
-                avg_latency = successful_data['latency_ms'].mean()
-                p50_latency = successful_data['latency_ms'].quantile(0.5)
-                p95_latency = successful_data['latency_ms'].quantile(0.95)
-                p99_latency = successful_data['latency_ms'].quantile(0.99)
+                latency_stats = calculate_latency_stats(successful_data, latency_col='latency_ms')
+                avg_latency = latency_stats['avg']
+                p50_latency = latency_stats['p50']
+                p95_latency = latency_stats['p95']
+                p99_latency = latency_stats['p99']
             else:
                 avg_latency = p50_latency = p95_latency = p99_latency = 0
             
@@ -69,7 +68,7 @@ Successful Requests: {successful_requests:,}
 Success Rate: {success_rate:.2%}
 
 Duration: {duration/3600:.2f} hours
-Total Data: {total_bytes/BYTES_PER_GB:.2f} GB
+Total Data: {bytes_to_gb(total_bytes):.2f} GB
 Average Throughput: {throughput_gbps:.2f} Gbps
 
 Latency Statistics (ms):
@@ -117,8 +116,8 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             start_time = self.data['start_ts'].min()
             end_time = self.data['end_ts'].max()
             
-            # Generate 30-second windows
-            window_size = 30.0
+            # Generate windows using configured window size
+            window_size = THROUGHPUT_WINDOW_SIZE_SECONDS
             window_start_times = []
             current_time = start_time
             while current_time <= end_time:
@@ -195,7 +194,15 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             # 5. Latency percentiles (third row, left)
             ax5 = fig.add_subplot(gs[2, :2])
             percentiles = [50, 90, 95, 99]
-            latency_percentiles = [successful_data['latency_ms'].quantile(p/100) for p in percentiles]
+            # Use shared utility for latency percentiles
+            latency_stats = calculate_latency_stats(successful_data, latency_col='latency_ms')
+            latency_percentiles = [
+                latency_stats['p50'] if p == 50 else
+                latency_stats['p95'] if p == 95 else
+                latency_stats['p99'] if p == 99 else
+                successful_data['latency_ms'].quantile(p/100)
+                for p in percentiles
+            ]
             ax5.bar([f'P{p}' for p in percentiles], latency_percentiles, 
                    color=['blue', 'orange', 'red', 'darkred'], alpha=0.7)
             ax5.set_title('Latency Percentiles', fontsize=14)
@@ -215,7 +222,9 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
                 phase_result['phase_id'] = phase_id
                 # Get latency from requests that started in this phase
                 phase_data = successful_data[successful_data['phase_id'] == phase_id]
-                phase_result['avg_latency'] = phase_data['latency_ms'].mean() if len(phase_data) > 0 else 0
+                # Use shared utility for latency stats
+                phase_latency_stats = calculate_latency_stats(phase_data, latency_col='latency_ms')
+                phase_result['avg_latency'] = phase_latency_stats['avg']
                 phase_summary_list.append(phase_result)
             
             phase_summary = pd.DataFrame(phase_summary_list)
@@ -236,15 +245,17 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             total_bytes = successful_data['bytes'].sum()
             # Calculate throughput in gigabits per second (Gbps)
             avg_throughput = calculate_throughput_gbps(total_bytes, total_duration)
-            avg_latency = successful_data['latency_ms'].mean()
-            p95_latency = successful_data['latency_ms'].quantile(0.95)
-            p99_latency = successful_data['latency_ms'].quantile(0.99)
+            # Use shared utility for latency stats
+            overall_latency_stats = calculate_latency_stats(successful_data, latency_col='latency_ms')
+            avg_latency = overall_latency_stats['avg']
+            p95_latency = overall_latency_stats['p95']
+            p99_latency = overall_latency_stats['p99']
             
             metrics_text = f"""
             KEY PERFORMANCE METRICS
             ========================
             Total Duration: {total_duration/3600:.2f} hours
-            Total Data Transferred: {total_bytes/BYTES_PER_GB:.2f} GB
+            Total Data Transferred: {bytes_to_gb(total_bytes):.2f} GB
             Average Throughput: {avg_throughput:.2f} Gbps
             Average Latency: {avg_latency:.1f} ms
             P95 Latency: {p95_latency:.1f} ms

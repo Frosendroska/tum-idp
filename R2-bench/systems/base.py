@@ -166,10 +166,12 @@ class ObjectStorageSystem:
 
     async def download_range(
         self, key: str, start: int, length: int
-    ) -> Tuple[Optional[bytes], float]:
+    ) -> Tuple[Optional[bytes], float, float]:
         """Download a range of an object asynchronously with request-level timeouts.
         
-        Returns (data, latency_ms). Data is None on failure.
+        Returns (data, latency_ms, rtt_ms). Data is None on failure.
+        - latency_ms: Total time from request start to data fully received
+        - rtt_ms: Round Trip Time (Time To First Byte) - time from request start to response received
 
         Args:
             key: Object key
@@ -177,7 +179,7 @@ class ObjectStorageSystem:
             length: Length in bytes
 
         Returns:
-            Tuple of (data bytes or None, latency_ms)
+            Tuple of (data bytes or None, latency_ms, rtt_ms)
         """
         if not self.client:
             raise RuntimeError("Storage client not initialized. Use async context manager.")
@@ -205,6 +207,9 @@ class ObjectStorageSystem:
                 timeout=REQUEST_TIMEOUT_SECONDS  # Configurable timeout for request
             )
             
+            # Measure RTT (Time To First Byte) - time until response is received
+            rtt_ms = (time.time() - start_time) * 1000
+            
             # Read body with timeout
             body = response["Body"]
             data = await asyncio.wait_for(
@@ -212,6 +217,7 @@ class ObjectStorageSystem:
                 timeout=REQUEST_TIMEOUT_SECONDS  # Configurable timeout for reading body
             )
             
+            # Total latency includes both RTT and data transfer time
             latency_ms = (time.time() - start_time) * 1000
             
             # Validate we got expected amount of data
@@ -227,7 +233,7 @@ class ObjectStorageSystem:
                 self._metrics['total_bytes'] += len(data)
                 self._metrics['total_latency_ms'] += latency_ms
             
-            return data, latency_ms
+            return data, latency_ms, rtt_ms
 
         except asyncio.TimeoutError:
             logger.warning(
@@ -237,21 +243,21 @@ class ObjectStorageSystem:
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
-            return None, 0
+            return None, 0, 0
         
         except IncompleteRead as e:
             logger.debug(f"IncompleteRead for {key} range {start}-{start + length - 1}: {e}")
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
-            return None, 0
+            return None, 0, 0
         
         except ReadTimeoutError as e:
             logger.debug(f"Read timeout for {key} range {start}-{start + length - 1}: {e}")
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
-            return None, 0
+            return None, 0, 0
         
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
@@ -271,7 +277,7 @@ class ObjectStorageSystem:
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
-            return None, 0
+            return None, 0, 0
         
         except Exception as e:
             # Check if this is a ClientPayloadError (incomplete payload from aiohttp)
@@ -298,7 +304,7 @@ class ObjectStorageSystem:
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
-            return None, 0
+            return None, 0, 0
     
     async def verify_connection(self) -> bool:
         """Verify storage connection and configuration."""
