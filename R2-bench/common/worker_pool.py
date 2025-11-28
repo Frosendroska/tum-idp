@@ -6,6 +6,7 @@ import asyncio
 import time
 import logging
 import random
+import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional
 from persistence.record import BenchmarkRecord
@@ -19,8 +20,9 @@ from configuration import (
     PROGRESS_INTERVAL,
     OBJECT_SIZE_GB,
     BITS_PER_BYTE,
-    MEGABITS_PER_MB,
+    GIGABITS_PER_GB,
 )
+from common.throughput_utils import calculate_phase_throughput_with_prorating
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +120,7 @@ class WorkerPool:
                 "object_key": object_key,
                 "consecutive_errors": 0,
                 "requests_completed": 0,
+                "total_errors": 0,
             }
 
         # Start persistence task if not already running
@@ -145,6 +148,7 @@ class WorkerPool:
                     "object_key": object_key,
                     "consecutive_errors": 0,
                     "requests_completed": 0,
+                    "total_errors": 0,
                 }
             # Start additional workers
             for i in range(current_workers, target_workers):
@@ -216,9 +220,16 @@ class WorkerPool:
                     for task in done:
                         try:
                             success = await task
+                            worker_state["requests_completed"] = (
+                                worker_state.get("requests_completed", 0) + 1
+                            )
+                            
                             if not success:
                                 worker_state["consecutive_errors"] = (
                                     worker_state.get("consecutive_errors", 0) + 1
+                                )
+                                worker_state["total_errors"] = (
+                                    worker_state.get("total_errors", 0) + 1
                                 )
                                 if (
                                     worker_state["consecutive_errors"]
@@ -231,9 +242,6 @@ class WorkerPool:
                                     return
                             else:
                                 worker_state["consecutive_errors"] = 0
-                                worker_state["requests_completed"] = (
-                                    worker_state.get("requests_completed", 0) + 1
-                                )
 
                                 # Log progress less frequently
                                 if (
@@ -245,10 +253,28 @@ class WorkerPool:
                                         f"Worker {worker_id}: "
                                         f"{worker_state['requests_completed']} requests completed"
                                     )
+                            
+                            # Check if error rate is too high (after sufficient requests)
+                            requests_completed = worker_state.get("requests_completed", 0)
+                            if requests_completed > 50:
+                                total_errors = worker_state.get("total_errors", 0)
+                                error_rate = total_errors / requests_completed if requests_completed > 0 else 0
+                                if error_rate > 0.3:  # 30% error rate
+                                    logger.error(
+                                        f"Worker {worker_id} stopping: error rate too high "
+                                        f"({error_rate:.1%}, {total_errors}/{requests_completed})"
+                                    )
+                                    return
                         except Exception as e:
                             logger.warning(f"Worker {worker_id} task error: {e}")
                             worker_state["consecutive_errors"] = (
                                 worker_state.get("consecutive_errors", 0) + 1
+                            )
+                            worker_state["total_errors"] = (
+                                worker_state.get("total_errors", 0) + 1
+                            )
+                            worker_state["requests_completed"] = (
+                                worker_state.get("requests_completed", 0) + 1
                             )
 
         except Exception as e:
@@ -295,14 +321,18 @@ class WorkerPool:
                     else:
                         retry_count += 1
                         if retry_count < MAX_RETRIES:
-                            await asyncio.sleep(1.0)
+                            # Exponential backoff: 2^retry_count seconds, max 30s
+                            backoff_time = min(2 ** retry_count, 30)
+                            await asyncio.sleep(backoff_time)
                 except Exception as e:
                     retry_count += 1
                     logger.warning(
                         f"Worker {worker_id} retry {retry_count}/{MAX_RETRIES}: {e}"
                     )
                     if retry_count < MAX_RETRIES:
-                        await asyncio.sleep(1.0)
+                        # Exponential backoff: 2^retry_count seconds, max 30s
+                        backoff_time = min(2 ** retry_count, 30)
+                        await asyncio.sleep(backoff_time)
 
             # Record request end time
             request_end_ts = time.time()
@@ -427,45 +457,39 @@ class WorkerPool:
         else:
             p50_latency = p95_latency = p99_latency = 0
 
-        # Calculate phase boundaries for prorating
-        if phase_records:
-            phase_start = min(r.start_ts for r in phase_records)
-            phase_end = max(r.end_ts for r in phase_records)
-            phase_duration = phase_end - phase_start
-        else:
-            phase_start = phase_end = phase_duration = 0
-
-        # Prorate bytes from ALL successful requests that overlap with this phase
-        total_bytes = 0.0
-        prorated_request_count = 0
-
+        # Convert records to DataFrame for shared throughput calculation utilities
+        records_data = []
         for record in all_records:
-            if record.http_status != 200:
-                continue
-
-            # Check if request overlaps with this phase
-            if record.start_ts < phase_end and record.end_ts > phase_start:
-                # Calculate overlap
-                overlap_start = max(record.start_ts, phase_start)
-                overlap_end = min(record.end_ts, phase_end)
-                overlap_duration = max(0, overlap_end - overlap_start)
-
-                # Calculate total request duration
-                request_duration = record.end_ts - record.start_ts
-
-                if request_duration > 0:
-                    # Prorate bytes based on overlap
-                    prorated_bytes = (record.bytes * overlap_duration) / request_duration
-                    total_bytes += prorated_bytes
-                    prorated_request_count += 1
-
-        # Calculate throughput in megabits per second (Mbps) using prorated bytes
-        # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
-        throughput_mbps = (
-            (total_bytes * BITS_PER_BYTE) / (phase_duration * MEGABITS_PER_MB)
-            if phase_duration > 0
-            else 0
+            records_data.append({
+                'thread_id': record.thread_id,
+                'conn_id': record.conn_id,
+                'object_key': record.object_key,
+                'range_start': record.range_start,
+                'range_len': record.range_len,
+                'bytes': record.bytes,
+                'latency_ms': record.latency_ms,
+                'http_status': record.http_status,
+                'concurrency': record.concurrency,
+                'phase_id': record.phase_id,
+                'start_ts': record.start_ts,
+                'end_ts': record.end_ts
+            })
+        
+        records_df = pd.DataFrame(records_data)
+        
+        # Use shared throughput calculation utility with prorating
+        # This handles requests that span phase boundaries correctly
+        throughput_result = calculate_phase_throughput_with_prorating(
+            records_df,
+            phase_id=phase_id
         )
+        
+        throughput_gbps = throughput_result['throughput_gbps']
+        total_bytes = throughput_result['total_bytes']
+        prorated_request_count = throughput_result['request_count']
+        phase_start = throughput_result['phase_start']
+        phase_end = throughput_result['phase_end']
+        phase_duration = throughput_result['duration_seconds']
 
         return {
             "phase_id": phase_id,
@@ -474,7 +498,7 @@ class WorkerPool:
             "successful_requests": successful_requests,
             "error_requests": error_requests,
             "error_rate": error_rate,
-            "throughput_mbps": throughput_mbps,
+            "throughput_gbps": throughput_gbps,
             "avg_latency_ms": avg_latency,
             "p50_latency_ms": p50_latency,
             "p95_latency_ms": p95_latency,

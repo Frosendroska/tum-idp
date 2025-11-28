@@ -82,6 +82,8 @@ Our next step is to run more comprehensive experiments from EC2, where we’ll s
 
 The design document of this benchmarking is in (README.md)[R2-bench/README.md].
 
+##### Fisrst solution
+
 #### Results R2
 
 **For 100 MB chunks:**
@@ -90,14 +92,14 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
   - The results are in the [r5.xlarge](../r2-plots/r5.xlarge/) folder.
     Summary:
     ```
-    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    Phase        Duration     Requests     Data (GB)    Throughput (Gbps)      Req/s      Latency (ms)    Concurrency 
     ----------------------------------------------------------------------------------------------------
-    warmup       60.3         310          30.273       4315.13         5.14       1567.3          8           
-    ramp_1       304.1        1604         156.641      4424.23         5.27       1503.5          8           
-    ramp_2       305.5        2015         196.777      5532.15         6.59       6044.0          41          
-    ramp_3       307.2        2111         206.152      5764.01         6.87       10429.6         73          
-    ramp_4       285.4        1964         191.797      5772.15         6.88       15095.9         104         
-    ALL          1261.4       8004         781.641      5322.92         6.35       8338.5          57            
+    warmup       60.3         310          30.273       4.32                  5.14       1567.3          8           
+    ramp_1       304.1        1604         156.641      4.42                  5.27       1503.5          8           
+    ramp_2       305.5        2015         196.777      5.53                  6.59       6044.0          41          
+    ramp_3       307.2        2111         206.152      5.76                  6.87       10429.6         73          
+    ramp_4       285.4        1964         191.797      5.77                  6.88       15095.9         104         
+    ALL          1261.4       8004         781.641      5.32                  6.35       8338.5          57            
     ```
     ![](../R2-bench/r2-plots/r5.xlarge/per_second_throughput_timeline.png)
 
@@ -105,14 +107,14 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
   - The results are in the [c5n.9xlarge](../r2-plots/c5n.9xlarge/) folder.
     Summary:
     ```
-    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    Phase        Duration     Requests     Data (GB)    Throughput (Gbps)      Req/s      Latency (ms)    Concurrency 
     ----------------------------------------------------------------------------------------------------
-    warmup       60.7         338          33.008       4673.78         5.57       1438.0          8           
-    ramp_1       303.0        1370         133.789      3792.27         4.52       1755.0          8           
-    ramp_2       303.3        3557         347.363      9839.12         11.73      3399.2          40          
-    ramp_3       303.9        3548         346.484      9794.84         11.68      6148.1          73          
-    ramp_4       292.8        3390         331.055      9711.35         11.58      8992.2          104         
-    ALL          1261.9       12203        1191.699     8112.24         9.67       5513.3          63      
+    warmup       60.7         338          33.008       4.67                  5.57       1438.0          8           
+    ramp_1       303.0        1370         133.789      3.79                  4.52       1755.0          8           
+    ramp_2       303.3        3557         347.363      9.84                  11.73      3399.2          40          
+    ramp_3       303.9        3548         346.484      9.79                  11.68      6148.1          73          
+    ramp_4       292.8        3390         331.055      9.71                  11.58      8992.2          104         
+    ALL          1261.9       12203        1191.699     8.11                  9.67       5513.3          63      
     ```
     ![pic](../R2-bench/r2-plots/c5n.9xlarge/per_second_throughput_timeline.png)
 
@@ -120,14 +122,14 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
   - The results are in the [c6in.16xlarge](../r2-plots/c6in.16xlarge/) folder.
     Summary:
     ```
-    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    Phase        Duration     Requests     Data (GB)    Throughput (Gbps)      Req/s      Latency (ms)    Concurrency 
     ----------------------------------------------------------------------------------------------------
-    warmup       59.5         369          36.035       5198.37         6.20       1304.4          8           
-    ramp_1       301.0        1812         176.953      5049.59         6.02       1324.9          8           
-    ramp_2       302.6        5320         519.531      14747.04        17.58      2270.0          40          
-    ramp_3       303.2        5168         504.688      14298.46        17.05      4210.0          72          
-    ramp_4       295.3        5390         526.367      15313.51        18.26      5701.6          104         
-    ALL          1261.5       18059        1763.574     12008.27        14.31      3734.8          65    
+    warmup       59.5         369          36.035       5.20                  6.20       1304.4          8           
+    ramp_1       301.0        1812         176.953      5.05                  6.02       1324.9          8           
+    ramp_2       302.6        5320         519.531      14.75                 17.58      2270.0          40          
+    ramp_3       303.2        5168         504.688      14.30                 17.05      4210.0          72          
+    ramp_4       295.3        5390         526.367      15.31                 18.26      5701.6          104         
+    ALL          1261.5       18059        1763.574     12.01                 14.31      3734.8          65    
     ```
     ![pic](../R2-bench/r2-plots/c6in.16xlarge/per_second_throughput_timeline.png)
 
@@ -135,14 +137,14 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
   - The results are in the [hpc7g.16xlarge](../r2-plots/hpc7g.16xlarge/) folder.
     Summary:
     ```
-    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    Phase        Duration     Requests     Data (GB)    Throughput (Gbps)      Req/s      Latency (ms)    Concurrency 
     ----------------------------------------------------------------------------------------------------
-    warmup       60.6         326          31.836       4514.45         5.38       1488.8          8           
-    ramp_1       302.2        1632         159.375      4530.14         5.40       1474.3          8           
-    ramp_2       304.6        2798         273.242      7705.03         9.19       4331.9          40          
-    ramp_3       305.4        2694         263.086      7400.75         8.82       8137.0          73          
-    ramp_4       289.7        2528         246.875      7319.00         8.72       11927.1         104         
-    ALL          1261.9       9978         974.414      6632.83         7.91       6723.3          59     
+    warmup       60.6         326          31.836       4.51                  5.38       1488.8          8           
+    ramp_1       302.2        1632         159.375      4.53                  5.40       1474.3          8           
+    ramp_2       304.6        2798         273.242      7.71                  9.19       4331.9          40          
+    ramp_3       305.4        2694         263.086      7.40                  8.82       8137.0          73          
+    ramp_4       289.7        2528         246.875      7.32                  8.72       11927.1         104         
+    ALL          1261.9       9978         974.414      6.63                  7.91       6723.3          59     
     ```
     ![pic](../r2-bench/r2-plots/hpc7g.16xlarge/per_second_throughput_timeline.png)
 
@@ -152,13 +154,13 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
   - The results are in the [r5.xlarge](../s3-plots/r5.xlarge/) folder.
     Summary:
     ```
-    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    Phase        Duration     Requests     Data (GB)    Throughput (Gbps)      Req/s      Latency (ms)    Concurrency 
     ----------------------------------------------------------------------------------------------------
-    warmup       60.0         389          37.988       5437.52         6.48       1237.9          8           
-    ramp_1       307.1        1730         168.945      4725.47         5.63       1395.7          8           
-    ramp_2       310.2        2089         204.004      5648.38         6.73       5832.4          41          
-    ramp_3       292.5        2073         202.441      5945.38         7.09       10144.4         72          
-    ALL          961.4        6281         613.379      5480.57         6.53       5749.0          40          
+    warmup       60.0         389          37.988       5.44                  6.48       1237.9          8           
+    ramp_1       307.1        1730         168.945      4.73                  5.63       1395.7          8           
+    ramp_2       310.2        2089         204.004      5.65                  6.73       5832.4          41          
+    ramp_3       292.5        2073         202.441      5.95                  7.09       10144.4         72          
+    ALL          961.4        6281         613.379      5.48                  6.53       5749.0          40          
     ```
     ![](../R2-bench/s3-plots/r5.xlarge/per_second_throughput_timeline.png)
 
@@ -166,14 +168,14 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
   - The results are in the [c5n.9xlarge](../s3-plots/c5n.9xlarge/) folder.
     Summary:
     ```
-    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    Phase        Duration     Requests     Data (GB)    Throughput (Gbps)      Req/s      Latency (ms)    Concurrency 
     ----------------------------------------------------------------------------------------------------
-    warmup       60.1         430          41.992       6006.57         7.16       1125.1          8           
-    ramp_1       302.0        2133         208.301      5925.49         7.06       1124.7          8           
-    ramp_2       303.1        3552         346.875      9830.11         11.72      3402.4          40          
-    ramp_3       310.3        3313         323.535      8955.12         10.68      6611.1          73          
-    ramp_4       293.2        3043         297.168      8706.59         10.38      9958.9          104         
-    ALL          1261.8       12471        1217.871     8290.59         9.88       5386.5          58          
+    warmup       60.1         430          41.992       6.01                  7.16       1125.1          8           
+    ramp_1       302.0        2133         208.301      5.93                  7.06       1124.7          8           
+    ramp_2       303.1        3552         346.875      9.83                  11.72      3402.4          40          
+    ramp_3       310.3        3313         323.535      8.96                  10.68      6611.1          73          
+    ramp_4       293.2        3043         297.168      8.71                  10.38      9958.9          104         
+    ALL          1261.8       12471        1217.871     8.29                  9.88       5386.5          58          
     ```
     ![pic](../R2-bench/s3-plots/c5n.9xlarge/per_second_throughput_timeline.png)
 
@@ -181,14 +183,14 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
   - The results are in the [c6in.16xlarge](../s3-plots/c6in.16xlarge/) folder.
     Summary:
     ```
-    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    Phase        Duration     Requests     Data (GB)    Throughput (Gbps)      Req/s      Latency (ms)    Concurrency 
     ----------------------------------------------------------------------------------------------------
-    warmup       60.0         439          42.871       6139.58         7.32       1105.5          8           
-    ramp_1       300.7        2174         212.305      6065.04         7.23       1101.6          8           
-    ramp_2       302.7        5568         543.750      15429.58        18.39      2167.3          40          
-    ramp_3       303.0        5052         493.359      13988.34        16.68      4306.2          72          
-    ramp_4       295.6        4657         454.785      13216.54        15.76      6593.0          104         
-    ALL          1261.7       17890        1747.070     11894.04        14.18      3767.8          61           
+    warmup       60.0         439          42.871       6.14                  7.32       1105.5          8           
+    ramp_1       300.7        2174         212.305      6.07                  7.23       1101.6          8           
+    ramp_2       302.7        5568         543.750      15.43                 18.39      2167.3          40          
+    ramp_3       303.0        5052         493.359      13.99                 16.68      4306.2          72          
+    ramp_4       295.6        4657         454.785      13.22                 15.76      6593.0          104         
+    ALL          1261.7       17890        1747.070     11.89                 14.18      3767.8          61           
     ```
     ![pic](../R2-bench/s3-plots/c6in.16xlarge/per_second_throughput_timeline.png)
 
@@ -196,14 +198,65 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
   - The results are in the [hpc7g.16xlarge](../s3-plots/hpc7g.16xlarge/) folder.
     Summary:
     ```
-    Phase        Duration     Requests     Data (GB)    Throughput      Req/s      Latency (ms)    Concurrency 
+    Phase        Duration     Requests     Data (GB)    Throughput (Gbps)      Req/s      Latency (ms)    Concurrency 
   ----------------------------------------------------------------------------------------------------
-  warmup       60.0         425          41.504       5939.29         7.08       1134.5          8           
-  ramp_1       302.9        2108         205.859      5838.47         6.96       1138.7          8           
-  ramp_2       305.2        2574         251.367      7074.50         8.43       4716.0          40          
-  ramp_3       311.6        2394         233.789      6444.58         7.68       9173.8          73          
-  ramp_4       289.8        2173         212.207      6290.20         7.50       13810.2         104         
-  ALL          1261.7       9674         944.727      6431.84         7.67       6925.1          54          
+  warmup       60.0         425          41.504       5.94                  7.08       1134.5          8           
+  ramp_1       302.9        2108         205.859      5.84                  6.96       1138.7          8           
+  ramp_2       305.2        2574         251.367      7.07                  8.43       4716.0          40          
+  ramp_3       311.6        2394         233.789      6.44                  7.68       9173.8          73          
+  ramp_4       289.8        2173         212.207      6.29                  7.50       13810.2         104         
+  ALL          1261.7       9674         944.727      6.43                  7.67       6925.1          54          
     ```
     ![pic](../r2-bench/s3-plots/hpc7g.16xlarge/per_second_throughput_timeline.png)
 
+#### Comparison S3 vs R2
+
+r5.xlarge
+```
+====================================================================================================
+Phase        Concurrency    S3 Throughput (Gbps)    R2 Throughput (Gbps)    S3 Latency (ms)    R2 Latency (ms)
+----------------------------------------------------------------------------------------------------
+warmup       8              5.44                    4.32                    1237.9            1567.3
+ramp_1       8              4.73                    4.42                    1395.7            1503.5
+ramp_2       41             5.65                    5.53                    5832.4            6044.0
+ramp_3       72             5.95                    5.76                    10144.4           10429.6
+ramp_4       -              -                       5.77                    -                 15095.9
+```
+
+c5n.9xlarge
+```
+====================================================================================================
+Phase        Concurrency    S3 Throughput (Gbps)    R2 Throughput (Gbps)    S3 Latency (ms)    R2 Latency (ms)
+----------------------------------------------------------------------------------------------------
+warmup       8              6.01                    4.67                    1125.1            1438.0
+ramp_1       8              5.93                    3.79                    1124.7            1755.0
+ramp_2       40             9.83                    9.84                    3402.4            3399.2
+ramp_3       73             8.96                    9.79                    6611.1            6148.1
+ramp_4       104            8.71                    9.71                    9958.9            8992.2
+```
+
+c6in.16xlarge
+```
+====================================================================================================
+Phase        Concurrency    S3 Throughput (Gbps)    R2 Throughput (Gbps)    S3 Latency (ms)    R2 Latency (ms)
+----------------------------------------------------------------------------------------------------
+warmup       8              6.14                    5.20                    1105.5            1304.4
+ramp_1       8              6.07                    5.05                    1101.6            1324.9
+ramp_2       40             15.43                   14.75                   2167.3            2270.0
+ramp_3       72             13.99                   14.30                   4306.2            4210.0
+ramp_4       104            13.22                   15.31                   6593.0            5701.6
+```
+
+hpc7a.12xlarge
+```
+====================================================================================================
+Phase        Concurrency    S3 Throughput (Gbps)    R2 Throughput (Gbps)    S3 Latency (ms)    R2 Latency (ms)
+----------------------------------------------------------------------------------------------------
+warmup       8              5.94                    4.51                    1134.5            1488.8
+ramp_1       8              5.84                    4.53                    1138.7            1474.3
+ramp_2       40             7.07                    7.71                    4716.0            4331.9
+ramp_3       73             6.44                    7.40                    9173.8            8137.0
+ramp_4       104            6.29                    7.32                    13810.2           11927.1
+```
+
+##### Last solution

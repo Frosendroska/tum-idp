@@ -25,13 +25,13 @@ class WarmUp:
         warm_up_minutes,
         concurrency: int = None,
         object_key: str = None,
-        system_bandwidth_mbps: float = None,
+        system_bandwidth_gbps: float = None,
     ):
         self.worker_pool = worker_pool
         self.warm_up_minutes = warm_up_minutes
         self.concurrency = concurrency or INITIAL_CONCURRENCY
         self.object_key = object_key or DEFAULT_OBJECT_KEY
-        self.system_bandwidth_mbps = system_bandwidth_mbps
+        self.system_bandwidth_gbps = system_bandwidth_gbps
 
         logger.info(
             f"Initialized warm-up: {warm_up_minutes} minutes, {self.concurrency} connections"
@@ -67,7 +67,7 @@ class WarmUp:
 
         if step_stats:
             logger.info(
-                f"Warm-up completed: {step_stats['throughput_mbps']:.1f} Mbps, "
+                f"Warm-up completed: {step_stats['throughput_gbps']:.2f} Gbps, "
                 f"{step_stats['successful_requests']}/{step_stats['total_requests']} requests"
             )
         else:
@@ -75,7 +75,7 @@ class WarmUp:
             step_stats = {
                 "phase_id": "warmup",
                 "concurrency": self.concurrency,
-                "throughput_mbps": 0.0,
+                "throughput_gbps": 0.0,
                 "total_requests": 0,
                 "successful_requests": 0,
                 "error_requests": 0,

@@ -51,7 +51,7 @@ class TestPlateauDetection:
     
     def test_system_bandwidth_limit(self):
         """Should stop when system bandwidth limit is reached."""
-        plateau = PlateauCheck(system_bandwidth_mbps=5000)
+        plateau = PlateauCheck(system_bandwidth_gbps=5)
         plateau.add_measurement(8, 100, 5)
         plateau.add_measurement(16, 6000, 5)  # Exceeds limit
         
@@ -170,7 +170,7 @@ class TestPlateauDetection:
         assert 'plateau_reached' in summary
         assert 'reason' in summary
         assert summary['last_measurement']['concurrency'] == 24
-        assert summary['last_measurement']['throughput_mbps'] == 140
+        assert summary['last_measurement']['throughput_gbps'] == 140
     
     def test_peak_is_first_measurement(self):
         """Should handle case where first measurement is the peak."""
@@ -233,11 +233,11 @@ def run_examples():
             is_plateau, reason = plateau.is_plateau_reached()
             
             if i == 0:
-                print(f"  Step {i+1}: {concurrency} conn -> {throughput} Mbps")
+                print(f"  Step {i+1}: {concurrency} conn -> {throughput} Gbps")
             else:
                 prev_throughput = measurements[i-1][1]
                 change = ((throughput - prev_throughput) / prev_throughput) * 100
-                print(f"  Step {i+1}: {concurrency} conn -> {throughput} Mbps ({change:+.1f}%)")
+                print(f"  Step {i+1}: {concurrency} conn -> {throughput} Gbps ({change:+.1f}%)")
             
             if is_plateau:
                 print(f"  ✓ PLATEAU REACHED: {reason}")
