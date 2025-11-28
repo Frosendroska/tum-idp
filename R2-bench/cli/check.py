@@ -54,11 +54,11 @@ class CapacityChecker:
         self,
         storage_type: str,
         object_key: str,
-        system_bandwidth_mbps: float,
+        system_bandwidth_gbps: float,
     ):
         self.storage_type = storage_type.lower()
         self.object_key = object_key
-        self.system_bandwidth_mbps = system_bandwidth_mbps
+        self.system_bandwidth_gbps = system_bandwidth_gbps
         self.storage_system = None
 
         # Initialize components
@@ -71,7 +71,7 @@ class CapacityChecker:
         self._initialize_storage()
 
         logger.info(f"Initialized capacity checker for {storage_type.upper()}")
-        logger.info(f"System bandwidth limit: {self.system_bandwidth_mbps} Mbps")
+        logger.info(f"System bandwidth limit: {self.system_bandwidth_gbps} Gbps")
 
     def _initialize_storage(self):
         """Initialize the appropriate storage system."""
@@ -134,13 +134,13 @@ class CapacityChecker:
                     warm_up_minutes=WARM_UP_MINUTES,
                     concurrency=INITIAL_CONCURRENCY,
                     object_key=self.object_key,
-                    system_bandwidth_mbps=self.system_bandwidth_mbps,
+                    system_bandwidth_gbps=self.system_bandwidth_gbps,
                 )
 
                 warm_up_results = await warm_up.execute()
 
                 logger.info(
-                    f"Warm-up completed: {warm_up_results['throughput_mbps']:.1f} Mbps"
+                    f"Warm-up completed: {warm_up_results['throughput_gbps']:.2f} Gbps"
                 )
 
                 # Phase 2: Ramp-up to find optimal concurrency using Ramp class with shared worker pool
@@ -156,7 +156,7 @@ class CapacityChecker:
                     step_duration_seconds=RAMP_STEP_MINUTES * SECONDS_PER_MINUTE,
                     object_key=self.object_key,
                     plateau_threshold=PLATEAU_THRESHOLD,
-                    system_bandwidth_mbps=self.system_bandwidth_mbps,
+                    system_bandwidth_gbps=self.system_bandwidth_gbps,
                 )
 
                 ramp_results = await ramp.find_optimal_concurrency(
@@ -170,7 +170,7 @@ class CapacityChecker:
                 logger.info("=== Capacity Discovery Results ===")
                 logger.info(f"Best concurrency: {ramp_results['best_concurrency']}")
                 logger.info(
-                    f"Best throughput: {ramp_results['best_throughput_mbps']:.1f} Mbps"
+                    f"Best throughput: {ramp_results['best_throughput_gbps']:.2f} Gbps"
                 )
                 logger.info(f"Steps completed: {len(ramp_results['step_results'])}")
                 logger.info(f"Plateau detected: {ramp_results['plateau_detected']}")
@@ -179,7 +179,7 @@ class CapacityChecker:
                 # Show step-by-step results
                 for i, step in enumerate(ramp_results["step_results"]):
                     logger.info(
-                        f"Step {i+1}: {step['concurrency']} conn -> {step['throughput_mbps']:.1f} Mbps"
+                        f"Step {i+1}: {step['concurrency']} conn -> {step['throughput_gbps']:.2f} Gbps"
                     )
 
                 if parquet_file:
@@ -189,7 +189,7 @@ class CapacityChecker:
                     "warm_up": warm_up_results,
                     "ramp_up": ramp_results,
                     "optimal_concurrency": ramp_results["best_concurrency"],
-                    "max_throughput_mbps": ramp_results["best_throughput_mbps"],
+                    "max_throughput_gbps": ramp_results["best_throughput_gbps"],
                     "plateau_detected": ramp_results["plateau_detected"],
                     "plateau_reason": ramp_results["plateau_reason"],
                 }
@@ -200,7 +200,7 @@ class CapacityChecker:
                     "warm_up": {"error": "Interrupted by user"},
                     "ramp_up": {"error": "Interrupted by user"},
                     "optimal_concurrency": 0,
-                    "max_throughput_mbps": 0,
+                    "max_throughput_gbps": 0,
                     "plateau_detected": False,
                     "plateau_reason": "Interrupted by user",
                 }
@@ -224,7 +224,7 @@ async def main_async():
     )
     parser.add_argument("--object-key", help="Object key to test")
     parser.add_argument(
-        "--worker-bandwidth", type=float, help="Worker bandwidth limit in Mbps"
+        "--worker-bandwidth", type=float, help="Worker bandwidth limit in Gbps"
     )
 
     args = parser.parse_args()
@@ -232,14 +232,14 @@ async def main_async():
     checker = CapacityChecker(
         storage_type=args.storage,
         object_key=args.object_key,
-        system_bandwidth_mbps=args.worker_bandwidth,
+        system_bandwidth_gbps=args.worker_bandwidth,
     )
 
     try:
         results = await checker.check_capacity()
         print("\n=== Final Results ===")
         print(f"Optimal concurrency: {results['optimal_concurrency']}")
-        print(f"Max throughput: {results['max_throughput_mbps']:.1f} Mbps")
+        print(f"Max throughput: {results['max_throughput_gbps']:.2f} Gbps")
         print(f"Plateau detected: {results['plateau_detected']}")
         print(f"Plateau reason: {results['plateau_reason']}")
     except KeyboardInterrupt:

@@ -10,7 +10,7 @@ from configuration import (
     DEFAULT_OBJECT_KEY,
     RAMP_STEP_MINUTES,
     RAMP_STEP_CONCURRENCY,
-    SYSTEM_BANDWIDTH_MBPS,
+    SYSTEM_BANDWIDTH_GBPS,
     PLATEAU_THRESHOLD,
     MAX_ERROR_RATE,
     MIN_REQUESTS_FOR_ERROR_CHECK,
@@ -36,23 +36,23 @@ class Ramp:
         step_duration_seconds: int,
         object_key: str,
         plateau_threshold: float,
-        system_bandwidth_mbps: float,
+        system_bandwidth_gbps: float,
     ):
         self.worker_pool = worker_pool
         self.initial_concurrency = initial_concurrency
         self.ramp_step = ramp_step
         self.step_duration_seconds = step_duration_seconds
         self.object_key = object_key
-        self.system_bandwidth_mbps = system_bandwidth_mbps
+        self.system_bandwidth_gbps = system_bandwidth_gbps
 
         # Initialize plateau checker
         self.plateau_checker = PlateauCheck(
             threshold=plateau_threshold,
-            system_bandwidth_mbps=system_bandwidth_mbps,
+            system_bandwidth_gbps=system_bandwidth_gbps,
         )
 
         logger.info(
-            f"Initialized ramp with plateau detection: {initial_concurrency} -> ?, step {self.ramp_step} every {self.step_duration_seconds}s, system limit: {self.system_bandwidth_mbps} Mbps"
+            f"Initialized ramp with plateau detection: {initial_concurrency} -> ?, step {self.ramp_step} every {self.step_duration_seconds}s, system limit: {self.system_bandwidth_gbps} Gbps"
         )
 
     async def execute_step(self, concurrency: int, step_id: str) -> Dict[str, Any]:
@@ -85,7 +85,7 @@ class Ramp:
 
         if step_stats:
             logger.info(
-                f"Ramp step completed: {step_stats['throughput_mbps']:.1f} Mbps, "
+                f"Ramp step completed: {step_stats['throughput_gbps']:.2f} Gbps, "
                 f"{step_stats['successful_requests']}/{step_stats['total_requests']} requests"
             )
         else:
@@ -93,7 +93,7 @@ class Ramp:
             step_stats = {
                 "phase_id": step_id,
                 "concurrency": concurrency,
-                "throughput_mbps": 0.0,
+                "throughput_gbps": 0.0,
                 "total_requests": 0,
                 "successful_requests": 0,
                 "error_requests": 0,
@@ -138,7 +138,7 @@ class Ramp:
                 error_rate = step_result["error_rate"]
 
                 logger.info(
-                    f"Step completed: {step_result['throughput_mbps']:.1f} Mbps, "
+                    f"Step completed: {step_result['throughput_gbps']:.2f} Gbps, "
                     f"{total_requests} requests, error rate: {error_rate:.1%}"
                 )
 
@@ -153,16 +153,16 @@ class Ramp:
                 # Add measurement to plateau checker
                 self.plateau_checker.add_measurement(
                     current_concurrency,
-                    step_result["throughput_mbps"],
+                    step_result["throughput_gbps"],
                     step_result["duration_seconds"],
                 )
 
                 # Check if we found better throughput
-                if step_result["throughput_mbps"] > best_throughput:
-                    best_throughput = step_result["throughput_mbps"]
+                if step_result["throughput_gbps"] > best_throughput:
+                    best_throughput = step_result["throughput_gbps"]
                     best_concurrency = current_concurrency
                     logger.info(
-                        f"New best: {best_concurrency} conn, {best_throughput:.1f} Mbps"
+                        f"New best: {best_concurrency} conn, {best_throughput:.2f} Gbps"
                     )
 
                 # Check for plateau using plateau detection algorithm
@@ -180,7 +180,7 @@ class Ramp:
 
             return {
                 "best_concurrency": best_concurrency,
-                "best_throughput_mbps": best_throughput,
+                "best_throughput_gbps": best_throughput,
                 "step_results": step_results,
                 "plateau_detected": (
                     plateau_reached if "plateau_reached" in locals() else False

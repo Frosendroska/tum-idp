@@ -10,13 +10,14 @@ import sys
 
 # Add parent directory to path for configuration import
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from configuration import BITS_PER_BYTE, MEGABITS_PER_MB, BYTES_PER_GB
+from configuration import BYTES_PER_GB
 
 from .base import BasePlotter
-from .throughput_utils import (
+from common.throughput_utils import (
     prorate_bytes_to_time_windows,
     calculate_phase_throughput_with_prorating,
-    get_phase_boundaries
+    get_phase_boundaries,
+    calculate_throughput_gbps
 )
 
 logger = logging.getLogger(__name__)
@@ -44,9 +45,8 @@ class DashboardPlotter(BasePlotter):
             end_time = self.data['end_ts'].max()
             duration = end_time - start_time
             
-            # Calculate throughput in megabits per second (Mbps)
-            # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
-            throughput_mbps = (total_bytes * BITS_PER_BYTE) / (duration * MEGABITS_PER_MB) if duration > 0 else 0
+            # Calculate throughput in gigabits per second (Gbps)
+            throughput_gbps = calculate_throughput_gbps(total_bytes, duration)
             
             # Calculate latency statistics
             successful_data = self.filter_successful_requests()
@@ -70,7 +70,7 @@ Success Rate: {success_rate:.2%}
 
 Duration: {duration/3600:.2f} hours
 Total Data: {total_bytes/BYTES_PER_GB:.2f} GB
-Average Throughput: {throughput_mbps:.1f} Mbps
+Average Throughput: {throughput_gbps:.2f} Gbps
 
 Latency Statistics (ms):
   Average: {avg_latency:.1f}
@@ -140,12 +140,12 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             for phase in phases:
                 phase_data = throughput_data[throughput_data['phase_id'] == phase]
                 if len(phase_data) > 0:
-                    ax1.plot(phase_data['window_start'], phase_data['throughput_mbps'], 
+                    ax1.plot(phase_data['window_start'], phase_data['throughput_gbps'], 
                             marker='o', linewidth=2, markersize=4, 
                             color=phase_color_map[phase], label=f'Phase: {phase}')
             
             ax1.set_title('Throughput Timeline', fontsize=14)
-            ax1.set_ylabel('Throughput (Mbps)')
+            ax1.set_ylabel('Throughput (Gbps)')
             ax1.grid(True, alpha=0.3)
             ax1.legend()
             
@@ -167,15 +167,16 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             concurrency_stats.columns = ['concurrency', 'total_bytes', 'start_time', 'end_time']
             
             concurrency_stats['duration_seconds'] = concurrency_stats['end_time'] - concurrency_stats['start_time']
-            # Calculate throughput in megabits per second (Mbps)
-            # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
-            concurrency_stats['throughput_mbps'] = (concurrency_stats['total_bytes'] * BITS_PER_BYTE) / (concurrency_stats['duration_seconds'] * MEGABITS_PER_MB)
+            # Calculate throughput in gigabits per second (Gbps)
+            concurrency_stats['throughput_gbps'] = concurrency_stats.apply(
+                lambda row: calculate_throughput_gbps(row['total_bytes'], row['duration_seconds']), axis=1
+            )
             
-            ax3.plot(concurrency_stats['concurrency'], concurrency_stats['throughput_mbps'], 
+            ax3.plot(concurrency_stats['concurrency'], concurrency_stats['throughput_gbps'], 
                     marker='o', linewidth=2, markersize=8, color='blue')
             ax3.set_title('Throughput vs Concurrency', fontsize=14)
             ax3.set_xlabel('Concurrency Level')
-            ax3.set_ylabel('Throughput (Mbps)')
+            ax3.set_ylabel('Throughput (Gbps)')
             ax3.grid(True, alpha=0.3)
             
             # 4. Error rate (second row, right)
@@ -219,10 +220,10 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             
             phase_summary = pd.DataFrame(phase_summary_list)
             
-            ax6.bar(phase_summary['phase_id'], phase_summary['throughput_mbps'], 
+            ax6.bar(phase_summary['phase_id'], phase_summary['throughput_gbps'], 
                    color=plt.cm.Set3(range(len(phase_summary))), alpha=0.7)
             ax6.set_title('Throughput by Phase', fontsize=14)
-            ax6.set_ylabel('Throughput (Mbps)')
+            ax6.set_ylabel('Throughput (Gbps)')
             ax6.tick_params(axis='x', rotation=45)
             ax6.grid(True, alpha=0.3)
             
@@ -233,9 +234,8 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             # Calculate key metrics using start_ts/end_ts
             total_duration = self.data['end_ts'].max() - self.data['start_ts'].min()
             total_bytes = successful_data['bytes'].sum()
-            # Calculate throughput in megabits per second (Mbps)
-            # Formula: (bytes * BITS_PER_BYTE) / (duration_seconds * MEGABITS_PER_MB)
-            avg_throughput = (total_bytes * BITS_PER_BYTE) / (total_duration * MEGABITS_PER_MB)
+            # Calculate throughput in gigabits per second (Gbps)
+            avg_throughput = calculate_throughput_gbps(total_bytes, total_duration)
             avg_latency = successful_data['latency_ms'].mean()
             p95_latency = successful_data['latency_ms'].quantile(0.95)
             p99_latency = successful_data['latency_ms'].quantile(0.99)
@@ -245,7 +245,7 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             ========================
             Total Duration: {total_duration/3600:.2f} hours
             Total Data Transferred: {total_bytes/BYTES_PER_GB:.2f} GB
-            Average Throughput: {avg_throughput:.1f} Mbps
+            Average Throughput: {avg_throughput:.2f} Gbps
             Average Latency: {avg_latency:.1f} ms
             P95 Latency: {p95_latency:.1f} ms
             P99 Latency: {p99_latency:.1f} ms

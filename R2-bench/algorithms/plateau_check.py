@@ -11,20 +11,20 @@ logger = logging.getLogger(__name__)
 class PlateauCheck:
     """Algorithm to check if throughput has plateaued or system bandwidth limit is reached."""
     
-    def __init__(self, threshold: float = None, system_bandwidth_mbps: float = 0):
+    def __init__(self, threshold: float = None, system_bandwidth_gbps: float = 0):
         self.threshold = threshold or PLATEAU_THRESHOLD
-        self.system_bandwidth_mbps = system_bandwidth_mbps
+        self.system_bandwidth_gbps = system_bandwidth_gbps
         self.measurements = []
-        logger.info(f"Initialized plateau checker with {self.threshold*100}% threshold, system bandwidth limit: {system_bandwidth_mbps} Mbps")
+        logger.info(f"Initialized plateau checker with {self.threshold*100}% threshold, system bandwidth limit: {system_bandwidth_gbps} Gbps")
     
-    def add_measurement(self, concurrency: int, throughput_mbps: float, duration_seconds: float):
+    def add_measurement(self, concurrency: int, throughput_gbps: float, duration_seconds: float):
         """Add a measurement."""
         self.measurements.append({
             'concurrency': concurrency,
-            'throughput_mbps': throughput_mbps,
+            'throughput_gbps': throughput_gbps,
             'duration_seconds': duration_seconds
         })
-        logger.debug(f"Added measurement: {concurrency} conn -> {throughput_mbps:.1f} Mbps")
+        logger.debug(f"Added measurement: {concurrency} conn -> {throughput_gbps:.2f} Gbps")
     
     def is_plateau_reached(self) -> tuple:
         """Check if plateau is reached, degradation detected, or system bandwidth limit is hit."""
@@ -32,22 +32,22 @@ class PlateauCheck:
             return False, "Not enough measurements"
         
         # Check system bandwidth limit first
-        if self.system_bandwidth_mbps > 0:
+        if self.system_bandwidth_gbps > 0:
             latest_measurement = self.measurements[-1]
-            total_throughput = latest_measurement['throughput_mbps']
+            total_throughput = latest_measurement['throughput_gbps']
             
-            if total_throughput >= self.system_bandwidth_mbps:
-                return True, f"System bandwidth limit reached: {total_throughput:.1f} Mbps >= {self.system_bandwidth_mbps} Mbps limit"
+            if total_throughput >= self.system_bandwidth_gbps:
+                return True, f"System bandwidth limit reached: {total_throughput:.2f} Gbps >= {self.system_bandwidth_gbps} Gbps limit"
         
         # Find peak throughput so far
-        peak_throughput = max(m['throughput_mbps'] for m in self.measurements)
-        latest_throughput = self.measurements[-1]['throughput_mbps']
+        peak_throughput = max(m['throughput_gbps'] for m in self.measurements)
+        latest_throughput = self.measurements[-1]['throughput_gbps']
         
         # Check for significant degradation from peak (more robust than consecutive comparison)
         if peak_throughput > 0:
             degradation_from_peak = (peak_throughput - latest_throughput) / peak_throughput
             if degradation_from_peak > PEAK_DEGRADATION_THRESHOLD:
-                return True, f"Significant degradation from peak: {degradation_from_peak:.1%} drop (peak: {peak_throughput:.1f} -> current: {latest_throughput:.1f} Mbps)"
+                return True, f"Significant degradation from peak: {degradation_from_peak:.1%} drop (peak: {peak_throughput:.2f} -> current: {latest_throughput:.2f} Gbps)"
         
         # Check for plateau (need at least 3 measurements)
         if len(self.measurements) < 3:
@@ -59,8 +59,8 @@ class PlateauCheck:
         # Calculate improvement/degradation between consecutive measurements
         changes = []
         for i in range(1, len(recent)):
-            prev_throughput = recent[i-1]['throughput_mbps']
-            curr_throughput = recent[i]['throughput_mbps']
+            prev_throughput = recent[i-1]['throughput_gbps']
+            curr_throughput = recent[i]['throughput_gbps']
             
             if prev_throughput > 0:
                 change = (curr_throughput - prev_throughput) / prev_throughput

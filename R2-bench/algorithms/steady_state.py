@@ -24,13 +24,13 @@ class SteadyState:
         duration_hours, 
         concurrency: int = 10,
         object_key: str = None,
-        system_bandwidth_mbps: float = None
+        system_bandwidth_gbps: float = None
     ):
         self.worker_pool = worker_pool
         self.duration_hours = duration_hours
         self.concurrency = concurrency
         self.object_key = object_key or DEFAULT_OBJECT_KEY
-        self.system_bandwidth_mbps = system_bandwidth_mbps
+        self.system_bandwidth_gbps = system_bandwidth_gbps
         
         logger.info(f"Initialized steady state: {concurrency} conn for {duration_hours}h")
     
@@ -64,7 +64,7 @@ class SteadyState:
         
         if step_stats:
             logger.info(
-                f"Steady state completed: {step_stats['throughput_mbps']:.1f} Mbps, "
+                f"Steady state completed: {step_stats['throughput_gbps']:.2f} Gbps, "
                 f"{step_stats['successful_requests']}/{step_stats['total_requests']} requests"
             )
         else:
@@ -72,7 +72,7 @@ class SteadyState:
             step_stats = {
                 "phase_id": "steady_state",
                 "concurrency": self.concurrency,
-                "throughput_mbps": 0.0,
+                "throughput_gbps": 0.0,
                 "total_requests": 0,
                 "successful_requests": 0,
                 "error_requests": 0,

@@ -13,7 +13,11 @@ import os
 from typing import Tuple, Optional, Dict, Any
 from urllib3.exceptions import IncompleteRead
 from botocore.exceptions import ReadTimeoutError
-from configuration import RANGE_SIZE_MB, MAX_CONCURRENCY
+from configuration import RANGE_SIZE_MB, MAX_CONCURRENCY, REQUEST_TIMEOUT_SECONDS
+
+# Import aiohttp exceptions for payload error handling
+# aiohttp is a required dependency of aioboto3, so it's always available
+from aiohttp.client_exceptions import ClientPayloadError
 
 logger = logging.getLogger(__name__)
 
@@ -198,14 +202,14 @@ class ObjectStorageSystem:
                     Key=key,
                     Range=range_header,
                 ),
-                timeout=30.0  # 30s timeout for request
+                timeout=REQUEST_TIMEOUT_SECONDS  # Configurable timeout for request
             )
             
             # Read body with timeout
             body = response["Body"]
             data = await asyncio.wait_for(
                 body.read(),
-                timeout=30.0  # Additional 30s for reading body
+                timeout=REQUEST_TIMEOUT_SECONDS  # Configurable timeout for reading body
             )
             
             latency_ms = (time.time() - start_time) * 1000
@@ -252,20 +256,45 @@ class ObjectStorageSystem:
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
             status_code = e.response.get('ResponseMetadata', {}).get('HTTPStatusCode', 0)
-            logger.error(
-                f"S3 error {error_code} (HTTP {status_code}) for {key} "
-                f"range {start}-{start+length-1}"
-            )
+            
+            # Highlight throttling errors
+            if status_code in (429, 503):
+                logger.error(
+                    f"🚨 R2 THROTTLING DETECTED: {error_code} (HTTP {status_code}) "
+                    f"for {key} range {start}-{start+length-1}"
+                )
+            else:
+                logger.error(
+                    f"S3 error {error_code} (HTTP {status_code}) for {key} "
+                    f"range {start}-{start+length-1}"
+                )
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
             return None, 0
         
         except Exception as e:
-            logger.error(
-                f"Unexpected error downloading {key} range {start}-{start+length-1}: {e}",
-                exc_info=True
-            )
+            # Check if this is a ClientPayloadError (incomplete payload from aiohttp)
+            # This happens when connection closes before all data is received
+            error_type = type(e).__name__
+            error_msg = str(e)
+            
+            if isinstance(e, ClientPayloadError):
+                logger.warning(
+                    f"Incomplete payload for {key} range {start}-{start+length-1}: "
+                    f"Connection closed before all data received. This is retryable."
+                )
+            elif "ContentLengthError" in error_type or "Not enough data to satisfy content length" in error_msg:
+                logger.warning(
+                    f"Incomplete payload for {key} range {start}-{start+length-1}: "
+                    f"Content length mismatch. This is retryable."
+                )
+            else:
+                logger.error(
+                    f"Unexpected error downloading {key} range {start}-{start+length-1}: {e}",
+                    exc_info=True
+                )
+            
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1

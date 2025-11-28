@@ -9,7 +9,7 @@ import pandas as pd
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from visualizations.throughput_utils import (
+from common.throughput_utils import (
     get_phase_boundaries,
     calculate_phase_throughput_with_prorating,
     prorate_bytes_to_time_windows
@@ -155,7 +155,7 @@ def test_prorating_time_windows():
     assert len(result) == 100
     
     # Each window should have 1/100 of the bytes = 10 bytes
-    # Throughput per second in megabits per second (Mbps): (10 bytes * BITS_PER_BYTE) / MEGABITS_PER_MB = 0.00008 Mbps
+    # Throughput per second in gigabits per second (Gbps): (10 bytes * BITS_PER_BYTE) / GIGABITS_PER_GB = 0.00000008 Gbps
     assert all(abs(row['total_bytes'] - 10.0) < 0.01 for _, row in result.iterrows())
 
 

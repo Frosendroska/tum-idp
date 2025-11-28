@@ -112,7 +112,7 @@ check
 
 **Features:**
 
-- Reports peak Mbps and Δ Mbps/step for the specified instance.
+- Reports peak Gbps and Δ Gbps/step for the specified instance.
 - Parquet raw per request.
 
 ### Benchmark
@@ -135,11 +135,11 @@ benchmark
 
 ## Metrics Captured
 
-- Throughput (Mbps - megabits per second) – aggregated per-second. Note: All throughput values are in megabits per second (Mbps), not megabytes per second (MB/s). To convert: 1 MB/s = 8 Mbps.
+- Throughput (Gbps - gigabits per second) – aggregated per-second. Note: All throughput values are in gigabits per second (Gbps). To convert: 1 Gbps = 1000 Gbps = 125 MB/s.
 - Latency – p50/p90/p95/p99 per GET (socket-open → last byte).
 - QPS / IOPS – requests per second.
 - Error Rates – HTTP 429/5xx, timeouts, retries (with exponential back-off).
-- Client Health – NIC Mbps, TCP retransmits, CPU utilisation.
+- Client Health – NIC Gbps, TCP retransmits, CPU utilisation.
 
 ## Tables columns
 
@@ -167,11 +167,11 @@ benchmark
 
 | Plot                | Axis                                    | Insight                                       |
 | ------------------- | --------------------------------------- | --------------------------------------------- |
-| Throughput timeline | Mbps vs. time (line)                    | Long-term stability & drift                   |
+| Throughput timeline | Gbps vs. time (line)                    | Long-term stability & drift                   |
 | Latency CDF         | Probability vs. latency_ms (step)       | Tail behaviour (p99/p99.9)                    |
 | Error histogram     | Count vs. HTTP code (bar)               | Frequency and class of failures               |
-| Concurrency heatmap | C vs. time, colour = Mbps               | Highlights plateau and effect of ramp steps   |
-| NIC health          | Mbps & retransmits vs. time (dual-axis) | Correlates network issues with latency spikes |
+| Concurrency heatmap | C vs. time, colour = Gbps               | Highlights plateau and effect of ramp steps   |
+| NIC health          | Gbps & retransmits vs. time (dual-axis) | Correlates network issues with latency spikes |
 | CPU vs. IRQs        | %CPU (user+sys) & IRQ/s (line)          | Detects kernel-level bottlenecks              |
 
 

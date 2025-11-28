@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from configuration import (
     OBJECT_SIZE_GB, STEADY_STATE_HOURS, DEFAULT_OBJECT_KEY,
-    DEFAULT_PLOTS_DIR, SYSTEM_BANDWIDTH_MBPS
+    DEFAULT_PLOTS_DIR, SYSTEM_BANDWIDTH_GBPS
 )
 
 # Set up logging (only if not already configured)
@@ -69,8 +69,8 @@ Examples:
                                 help='Storage type to use (default: r2)')
         check_parser.add_argument('--object-key', type=str, default=DEFAULT_OBJECT_KEY,
                                 help=f'Object key for the test object (default: {DEFAULT_OBJECT_KEY})')
-        check_parser.add_argument('--system-bandwidth', type=float, default=SYSTEM_BANDWIDTH_MBPS,
-                                help=f'Maximum total system bandwidth in Mbps (0 = disabled, default: {SYSTEM_BANDWIDTH_MBPS})')
+        check_parser.add_argument('--system-bandwidth', type=float, default=SYSTEM_BANDWIDTH_GBPS,
+                                help=f'Maximum total system bandwidth in Gbps (0 = disabled, default: {SYSTEM_BANDWIDTH_GBPS})')
         
         # Benchmark command
         benchmark_parser = subparsers.add_parser('benchmark', help='Long-term benchmark')

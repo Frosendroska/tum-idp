@@ -27,7 +27,7 @@ from configuration import (
     R2_SECRET_ACCESS_KEY,
     INITIAL_CONCURRENCY,
     DEFAULT_OBJECT_KEY,
-    SYSTEM_BANDWIDTH_MBPS,
+    SYSTEM_BANDWIDTH_GBPS,
     MAX_CONCURRENCY,
 )
 from systems.r2 import R2System
@@ -54,12 +54,12 @@ class BenchmarkRunner:
         storage_type: str = "r2",
         object_key: str = None,
         concurrency: int = None,
-        system_bandwidth_mbps: float = None,
+        system_bandwidth_gbps: float = None,
     ):
         self.storage_type = storage_type.lower()
         self.concurrency = concurrency
         self.object_key = object_key
-        self.system_bandwidth_mbps = system_bandwidth_mbps
+        self.system_bandwidth_gbps = system_bandwidth_gbps
         self.storage_system = None
         self.persistence = None
         self.worker_pool = None
@@ -70,7 +70,7 @@ class BenchmarkRunner:
         logger.info(
             f"Initialized benchmark runner: {storage_type.upper()} with {self.concurrency} connections"
         )
-        logger.info(f"Worker bandwidth limit: {self.system_bandwidth_mbps} Mbps")
+        logger.info(f"Worker bandwidth limit: {self.system_bandwidth_gbps} Gbps")
 
     def _initialize_components(self):
         """Initialize required components."""
@@ -132,13 +132,13 @@ class BenchmarkRunner:
                     warm_up_minutes=WARM_UP_MINUTES,
                     concurrency=self.concurrency,
                     object_key=self.object_key,
-                    system_bandwidth_mbps=self.system_bandwidth_mbps,
+                    system_bandwidth_gbps=self.system_bandwidth_gbps,
                 )
 
                 warm_up_results = await warm_up.execute()
 
                 logger.info(
-                    f"Warm-up completed: {warm_up_results['throughput_mbps']:.1f} Mbps"
+                    f"Warm-up completed: {warm_up_results['throughput_gbps']:.2f} Gbps"
                 )
 
                 # Phase 2: Ramp-up to find optimal concurrency using Ramp class with shared worker pool
@@ -154,7 +154,7 @@ class BenchmarkRunner:
                     step_duration_seconds=120,  # 2 minutes
                     object_key=self.object_key,
                     plateau_threshold=0.2,
-                    system_bandwidth_mbps=self.system_bandwidth_mbps,
+                    system_bandwidth_gbps=self.system_bandwidth_gbps,
                 )
 
                 ramp_results = await ramp.find_optimal_concurrency(
@@ -172,7 +172,7 @@ class BenchmarkRunner:
                     duration_hours=STEADY_STATE_HOURS,
                     concurrency=ramp_results["best_concurrency"],
                     object_key=self.object_key,
-                    system_bandwidth_mbps=self.system_bandwidth_mbps,
+                    system_bandwidth_gbps=self.system_bandwidth_gbps,
                 )
 
                 steady_results = await steady_state.execute()
@@ -186,7 +186,7 @@ class BenchmarkRunner:
                 logger.info(
                     f"Successful requests: {steady_results.get('successful_requests', 0)}"
                 )
-                logger.info(f"Throughput: {steady_results.get('throughput_mbps', 0):.1f} Mbps")
+                logger.info(f"Throughput: {steady_results.get('throughput_gbps', 0):.2f} Gbps")
                 logger.info(
                     f"Average latency: {steady_results.get('avg_latency_ms', 0):.1f} ms"
                 )
@@ -225,7 +225,7 @@ async def main_async():
         "--concurrency", type=int, help="Number of concurrent connections"
     )
     parser.add_argument(
-        "--worker-bandwidth", type=float, help="Worker bandwidth limit in Mbps"
+        "--worker-bandwidth", type=float, help="Worker bandwidth limit in Gbps"
     )
 
     args = parser.parse_args()
@@ -234,7 +234,7 @@ async def main_async():
         storage_type=args.storage,
         object_key=args.object_key,
         concurrency=args.concurrency,
-        system_bandwidth_mbps=args.worker_bandwidth,
+        system_bandwidth_gbps=args.worker_bandwidth,
     )
 
     try:
@@ -245,7 +245,7 @@ async def main_async():
         if "steady_state" in results:
             steady = results["steady_state"]
             print(f"Total requests: {steady.get('total_requests', 0)}")
-            print(f"Throughput: {steady.get('throughput_mbps', 0):.1f} Mbps")
+            print(f"Throughput: {steady.get('throughput_gbps', 0):.2f} Gbps")
             print(f"Average latency: {steady.get('avg_latency_ms', 0):.1f} ms")
     except KeyboardInterrupt:
         logger.info("Benchmark interrupted by user")
