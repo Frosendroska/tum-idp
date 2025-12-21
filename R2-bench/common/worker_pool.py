@@ -75,16 +75,45 @@ class WorkerPool:
         self.persistence_queue: asyncio.Queue = asyncio.Queue(maxsize=10000)
         self.persistence_task: Optional[asyncio.Task] = None
 
-        # Dedicated executor for persistence I/O (prevents bottleneck)
+        # Dedicated executor for persistence I/O (scaled with workers to prevent bottleneck)
         self._persistence_executor = ThreadPoolExecutor(
-            max_workers=4,
+            max_workers=max(20, self.max_workers // 2),  # Scale with workers, min 20
             thread_name_prefix="persistence"
         )
+        
+        # Executor monitoring
+        self._executor_queue_warnings = 0
+        
+        # Pre-computed range cache for better performance (eliminates random.randint overhead)
+        self._range_cache_size = max(
+            10000,  # Minimum 10k ranges
+            (OBJECT_SIZE_GB * BYTES_PER_GB // (RANGE_SIZE_MB * BYTES_PER_MB)) * 100  # 100x original
+        )
+        self._range_cache = self._precompute_ranges()
+        self._range_index = 0
 
         logger.info(
-            f"Initialized WorkerPool with max {max_workers} workers, "
-            f"pipeline_depth={pipeline_depth}, batch_size={persistence_batch_size}"
+            f"Initialized WorkerPool with max {self.max_workers} workers, "
+            f"pipeline_depth={pipeline_depth}, batch_size={persistence_batch_size}, "
+            f"persistence_threads={self._persistence_executor._max_workers}, "
+            f"range_cache_size={self._range_cache_size}"
         )
+
+    def _precompute_ranges(self) -> List[int]:
+        """Pre-compute random range starts to avoid random.randint overhead during requests."""
+        range_length = RANGE_SIZE_MB * BYTES_PER_MB
+        max_start = (OBJECT_SIZE_GB * BYTES_PER_GB) - range_length
+        
+        # Generate pre-computed random ranges
+        ranges = [random.randint(0, max_start) for _ in range(self._range_cache_size)]
+        logger.info(f"Pre-computed {len(ranges)} range starts (0 to {max_start})")
+        return ranges
+
+    def _get_next_range_start(self) -> int:
+        """Get next pre-computed range start (thread-safe with asyncio)."""
+        range_start = self._range_cache[self._range_index]
+        self._range_index = (self._range_index + 1) % self._range_cache_size
+        return range_start
 
     async def start_workers(
         self, concurrency: int, object_key: str, phase_id: str
@@ -299,10 +328,9 @@ class WorkerPool:
             True if successful, False otherwise
         """
         try:
-            # Calculate range for this request
+            # Calculate range for this request (using pre-computed ranges for performance)
             range_length = RANGE_SIZE_MB * BYTES_PER_MB
-            max_start = (OBJECT_SIZE_GB * BYTES_PER_GB) - range_length
-            range_start = random.randint(0, max_start)
+            range_start = self._get_next_range_start()
 
             # Record request start time
             request_start_ts = time.time()
@@ -354,7 +382,7 @@ class WorkerPool:
                 object_key=object_key,
                 range_start=range_start,
                 range_len=range_length,
-                bytes_downloaded=bytes_downloaded,
+                bytes=bytes_downloaded,
                 latency_ms=latency_ms,
                 rtt_ms=rtt_ms,
                 http_status=http_status,
@@ -415,17 +443,40 @@ class WorkerPool:
             logger.error(f"Persistence task error: {e}")
 
     async def _flush_batch(self, batch: List[BenchmarkRecord]):
-        """Flush a batch of records to persistence (runs in executor to avoid blocking)."""
+        """Flush a batch of records to persistence (non-blocking with timeout)."""
         if not batch:
             return
 
-        # Run synchronous persistence in dedicated executor to avoid blocking event loop
+        # Check executor health
+        if hasattr(self._persistence_executor, '_work_queue'):
+            queue_size = self._persistence_executor._work_queue.qsize()
+            if queue_size > 10:
+                self._executor_queue_warnings += 1
+                if self._executor_queue_warnings % 100 == 0:
+                    logger.warning(
+                        f"Executor queue backing up: {queue_size} items queued, "
+                        f"{self._persistence_executor._max_workers} threads"
+                    )
+
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            self._persistence_executor,
-            self._sync_flush_batch,
-            batch  # No copy needed - executor handles thread safety
-        )
+        
+        try:
+            # Wrap in wait_for to prevent infinite blocking
+            await asyncio.wait_for(
+                loop.run_in_executor(
+                    self._persistence_executor,
+                    self._sync_flush_batch,
+                    batch
+                ),
+                timeout=5.0  # 5 second timeout
+            )
+        except asyncio.TimeoutError:
+            # Executor is overloaded, just drop this batch
+            logger.warning(
+                f"Persistence executor overloaded, dropping batch of {len(batch)} records"
+            )
+        except Exception as e:
+            logger.error(f"Persistence flush error: {e}")
 
     def _sync_flush_batch(self, batch: List[BenchmarkRecord]):
         """Synchronously flush batch to persistence (called from executor)."""

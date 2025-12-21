@@ -23,15 +23,9 @@ if _project_root not in sys.path:
 from configuration import (
     WARM_UP_MINUTES,
     STEADY_STATE_HOURS,
-    AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY,
-    AWS_REGION,
-    R2_ACCESS_KEY_ID,
-    R2_SECRET_ACCESS_KEY,
     MAX_CONCURRENCY,
 )
-from systems.r2 import R2System
-from systems.aws import AWSSystem
+from common.storage_factory import create_storage_system
 from algorithms.warm_up import WarmUp
 from algorithms.ramp import Ramp
 from algorithms.steady_state import SteadyState
@@ -76,24 +70,7 @@ class BenchmarkRunner:
         """Initialize required components."""
         try:
             # Initialize storage system
-            if self.storage_type == "r2":
-                credentials = {
-                    "access_key_id": R2_ACCESS_KEY_ID,
-                    "secret_access_key": R2_SECRET_ACCESS_KEY,
-                    "region_name": "auto",
-                }
-                self.storage_system = R2System(credentials)
-
-            elif self.storage_type == "s3":
-                credentials = {
-                    "access_key_id": AWS_ACCESS_KEY_ID,
-                    "secret_access_key": AWS_SECRET_ACCESS_KEY,
-                    "region_name": AWS_REGION,
-                }
-                self.storage_system = AWSSystem(credentials)
-
-            else:
-                raise ValueError(f"Unsupported storage type: {self.storage_type}")
+            self.storage_system = create_storage_system(self.storage_type)
 
             # Initialize persistence
             self.persistence = ParquetPersistence()

@@ -1,83 +1,151 @@
 """
 Configuration constants for the R2 benchmark experiment.
+
+This module contains all configuration parameters including:
+- Cloud credentials and endpoints
+- Instance type configurations with bandwidth limits
+- Test parameters (object sizes, concurrency settings)
+- Algorithm parameters (thresholds, timeouts)
+- File size constants and conversion factors
 """
 
 import os
+from typing import Dict
+
+# =============================================================================
+# CLOUD STORAGE CONFIGURATION
+# =============================================================================
 
 # Object storage configuration
-BUCKET_NAME = os.getenv("BUCKET_NAME", "")
+BUCKET_NAME: str = os.getenv("BUCKET_NAME", "")
 
-# Common credentials
-S3_ENDPOINT = os.getenv("S3_ENDPOINT", "")
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-AWS_REGION = "eu-north-1"
+# AWS S3 credentials and configuration
+S3_ENDPOINT: str = os.getenv("S3_ENDPOINT", "")
+AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY: str = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+AWS_REGION: str = "eu-north-1"
 
-R2_ENDPOINT = os.getenv("R2_ENDPOINT", "")
-R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "")
-R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")
+# Cloudflare R2 credentials and configuration
+R2_ENDPOINT: str = os.getenv("R2_ENDPOINT", "")
+R2_ACCESS_KEY_ID: str = os.getenv("R2_ACCESS_KEY_ID", "")
+R2_SECRET_ACCESS_KEY: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
 
-# System bandwidth limits
-SYSTEM_BANDWIDTH_GBPS = 25
+# =============================================================================
+# EC2 INSTANCE CONFIGURATIONS
+# =============================================================================
 
-# Test parameters
-OBJECT_SIZE_GB = 9
-RANGE_SIZE_MB = 100
-DEFAULT_OBJECT_KEY = "test-object-9gb"
+# Maps instance type to vCPUs and maximum network bandwidth
+# Used for automatic bandwidth detection based on instance type
+INSTANCE_CONFIGS: Dict[str, Dict[str, int]] = {
+    "r5.xlarge": {
+        "vcpus": 4,
+        "max_bandwidth_gbps": 10,
+    },
+    "c5n.9xlarge": {
+        "vcpus": 36,
+        "max_bandwidth_gbps": 50,
+    },
+    "c6in.16xlarge": {
+        "vcpus": 64,
+        "max_bandwidth_gbps": 100,
+    },
+    "hpc7g.16xlarge": {
+        "vcpus": 64,
+        "max_bandwidth_gbps": 200,
+    },
+}
 
-# Benchmark phases
-WARM_UP_MINUTES = 1
-INITIAL_CONCURRENCY = 8
+# Default system bandwidth limit (fallback when instance type not specified)
+SYSTEM_BANDWIDTH_GBPS: float = 25.0
 
-RAMP_STEP_MINUTES = 5
-RAMP_STEP_CONCURRENCY = 32
-MAX_CONCURRENCY = 400
+# =============================================================================
+# TEST PARAMETERS
+# =============================================================================
 
-STEADY_STATE_HOURS = 3
+# Object configuration
+OBJECT_SIZE_GB: int = 9
+RANGE_SIZE_MB: int = 100
+DEFAULT_OBJECT_KEY: str = "test-object-9gb"
 
-# Algorithm parameters
-PLATEAU_THRESHOLD = 0.2
-PEAK_DEGRADATION_THRESHOLD = 0.5  # For degradation from historical peak
-ERROR_RETRY_DELAY = 1
-PROGRESS_INTERVAL = 50  # Log progress every N requests
+# =============================================================================
+# BENCHMARK PHASE CONFIGURATION
+# =============================================================================
 
-# CLI defaults
-DEFAULT_OUTPUT_DIR = "results"
-DEFAULT_PLOTS_DIR = "plots"
+# Warm-up phase
+WARM_UP_MINUTES: int = 1
+INITIAL_CONCURRENCY: int = 8
 
-# Error handling and termination
-MAX_ERROR_RATE = 0.2  # 20% error rate threshold
-MIN_REQUESTS_FOR_ERROR_CHECK = 10  # Minimum requests before checking error rate
-MAX_CONSECUTIVE_ERRORS = 20  # Stop after this many consecutive errors
-MAX_RETRIES = 3
+# Ramp-up phase
+RAMP_STEP_MINUTES: int = 5
+RAMP_STEP_CONCURRENCY: int = 32
+MAX_CONCURRENCY: int = 400
 
-# Request timeout configuration
-REQUEST_TIMEOUT_SECONDS = (
-    120  # Timeout for individual download requests (4x longer for 100MB chunks)
-)
+# Steady state phase
+STEADY_STATE_HOURS: int = 3
 
-# Logging configuration
+# =============================================================================
+# ALGORITHM PARAMETERS
+# =============================================================================
 
-# HTTP status codes
-HTTP_SUCCESS_STATUS = 200
-HTTP_ERROR_STATUS = 500
+PLATEAU_THRESHOLD: float = 0.2  # Minimum improvement threshold for plateau detection
+PEAK_DEGRADATION_THRESHOLD: float = 0.5  # Maximum degradation from historical peak
+ERROR_RETRY_DELAY: int = 1  # Delay between retries in seconds
+PROGRESS_INTERVAL: int = 50  # Log progress every N requests
 
-# File size constants
-BYTES_PER_MB = 1024 * 1024
-BYTES_PER_GB = 1024 * 1024 * 1024
-BITS_PER_BYTE = 8
-GIGABITS_PER_GB = 1_000_000_000  # 1 Gigabit = 1,000,000,000 bits
-SECONDS_PER_HOUR = 3600
-SECONDS_PER_MINUTE = 60
+# =============================================================================
+# ERROR HANDLING AND TIMEOUTS
+# =============================================================================
 
-# Visualization configuration
-THROUGHPUT_WINDOW_SIZE_SECONDS = 30.0  # Window size for throughput timeline plots
-PER_SECOND_WINDOW_SIZE_SECONDS = 1.0  # Window size for per-second throughput calculations
+MAX_ERROR_RATE: float = 0.2  # 20% error rate threshold
+MIN_REQUESTS_FOR_ERROR_CHECK: int = 10  # Minimum requests before checking error rate
+MAX_CONSECUTIVE_ERRORS: int = 20  # Stop after this many consecutive errors
+MAX_RETRIES: int = 3  # Maximum number of retry attempts
 
-# Worker pool defaults
-DEFAULT_MAX_WORKERS = 500  # Default maximum number of workers
-DEFAULT_PERSISTENCE_BATCH_SIZE = 100  # Default batch size for persistence
-PERSISTENCE_FLUSH_INTERVAL_SECONDS = 1.0  # Flush interval for persistence queue
+# Request timeout configuration (4x longer for 100MB chunks)
+REQUEST_TIMEOUT_SECONDS: int = 120
 
-# Algorithm defaults
-DEFAULT_MAX_CONCURRENCY_RAMP = 100  # Default max concurrency for ramp algorithm
+# =============================================================================
+# HTTP STATUS CODES
+# =============================================================================
+
+HTTP_SUCCESS_STATUS: int = 200
+HTTP_ERROR_STATUS: int = 500
+
+# =============================================================================
+# FILE SIZE CONSTANTS
+# =============================================================================
+
+BYTES_PER_MB: int = 1024 * 1024
+BYTES_PER_GB: int = 1024 * 1024 * 1024
+BITS_PER_BYTE: int = 8
+GIGABITS_PER_GB: int = 1_000_000_000  # 1 Gigabit = 1,000,000,000 bits
+SECONDS_PER_HOUR: int = 3600
+SECONDS_PER_MINUTE: int = 60
+
+# =============================================================================
+# VISUALIZATION CONFIGURATION
+# =============================================================================
+
+THROUGHPUT_WINDOW_SIZE_SECONDS: float = 30.0  # Window size for throughput timeline plots
+PER_SECOND_WINDOW_SIZE_SECONDS: float = 1.0  # Window size for per-second throughput calculations
+
+# =============================================================================
+# WORKER POOL DEFAULTS
+# =============================================================================
+
+DEFAULT_MAX_WORKERS: int = 500  # Default maximum number of workers
+DEFAULT_PERSISTENCE_BATCH_SIZE: int = 100  # Default batch size for persistence
+PERSISTENCE_FLUSH_INTERVAL_SECONDS: float = 1.0  # Flush interval for persistence queue
+
+# =============================================================================
+# CLI DEFAULTS
+# =============================================================================
+
+DEFAULT_OUTPUT_DIR: str = "results"
+DEFAULT_PLOTS_DIR: str = "plots"
+
+# =============================================================================
+# ALGORITHM DEFAULTS
+# =============================================================================
+
+DEFAULT_MAX_CONCURRENCY_RAMP: int = 100  # Default max concurrency for ramp algorithm
