@@ -15,8 +15,8 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 # No sys.path manipulation needed
 
 from configuration import (
-    OBJECT_SIZE_GB, STEADY_STATE_HOURS, DEFAULT_OBJECT_KEY,
-    DEFAULT_PLOTS_DIR, SYSTEM_BANDWIDTH_GBPS
+    OBJECT_SIZE_GB, DEFAULT_OBJECT_KEY,
+    DEFAULT_PLOTS_DIR, SYSTEM_BANDWIDTH_GBPS, INSTANCE_CONFIGS
 )
 
 # Set up logging (only if not already configured)
@@ -27,9 +27,29 @@ logger = logging.getLogger(__name__)
 
 class SimpleR2BenchmarkCLI:
     """Simple CLI interface for R2 benchmark experiment."""
-    
+
     def __init__(self):
         self.parser = self._create_parser()
+
+    @staticmethod
+    def _get_bandwidth_for_instance(instance_type: str) -> float:
+        """Get maximum bandwidth for a given instance type.
+
+        Args:
+            instance_type: EC2 instance type (e.g., 'r5.xlarge')
+
+        Returns:
+            Maximum bandwidth in Gbps, or default if instance type not found
+        """
+        if not instance_type:
+            return SYSTEM_BANDWIDTH_GBPS
+
+        config = INSTANCE_CONFIGS.get(instance_type)
+        if config:
+            return config["max_bandwidth_gbps"]
+
+        logger.warning(f"Unknown instance type '{instance_type}', using default bandwidth: {SYSTEM_BANDWIDTH_GBPS} Gbps")
+        return SYSTEM_BANDWIDTH_GBPS
     
     def _create_parser(self):
         """Create the main argument parser."""
@@ -40,13 +60,10 @@ class SimpleR2BenchmarkCLI:
 Examples:
   # Phase 0: Upload test objects to R2
   python cli.py upload --storage r2 --size 1
-  
-  # Phase 1: Capacity discovery (stops at plateau or worker bandwidth limit)
-  python cli.py check --storage r2 --worker-bandwidth 1000
-  
-  # Phase 2: Long-term benchmark with 64 connections for 3 hours
-  python cli.py benchmark --storage r2 --concurrency 64 --hours 3
-  
+
+  # Phase 1: Capacity discovery on r5.xlarge instance
+  python cli.py check --storage r2 --instance-type r5.xlarge
+
   # Generate plots from benchmark results
   python cli.py visualize --parquet-file results/benchmark_20241201_120000.parquet --output-dir plots
             """
@@ -69,18 +86,10 @@ Examples:
                                 help='Storage type to use (default: r2)')
         check_parser.add_argument('--object-key', type=str, default=DEFAULT_OBJECT_KEY,
                                 help=f'Object key for the test object (default: {DEFAULT_OBJECT_KEY})')
-        check_parser.add_argument('--system-bandwidth', type=float, default=SYSTEM_BANDWIDTH_GBPS,
-                                help=f'Maximum total system bandwidth in Gbps (0 = disabled, default: {SYSTEM_BANDWIDTH_GBPS})')
-        
-        # Benchmark command
-        benchmark_parser = subparsers.add_parser('benchmark', help='Long-term benchmark')
-        benchmark_parser.add_argument('--storage', choices=['r2', 's3'], default='r2',
-                                    help='Storage type to use (default: r2)')
-        benchmark_parser.add_argument('--hours', type=int, default=STEADY_STATE_HOURS,
-                                    help=f'Duration in hours (default: {STEADY_STATE_HOURS})')
-        benchmark_parser.add_argument('--object-key', type=str, default=DEFAULT_OBJECT_KEY,
-                                    help=f'Object key for the test object (default: {DEFAULT_OBJECT_KEY})')
-        
+        check_parser.add_argument('--instance-type', type=str, required=True,
+                                choices=list(INSTANCE_CONFIGS.keys()),
+                                help=f'EC2 instance type')
+
         # Visualize command
         visualize_parser = subparsers.add_parser('visualize', help='Generate plots from benchmark results')
         visualize_parser.add_argument('--parquet-file', type=str, required=True,
@@ -115,40 +124,21 @@ Examples:
         """Run the capacity check phase."""
         try:
             from cli.check import CapacityChecker
-            
+
             logger.info("=== Capacity Discovery ===")
-            
-            checker = CapacityChecker(args.storage, args.object_key, args.system_bandwidth)
+
+            # Get bandwidth from instance type
+            system_bandwidth = self._get_bandwidth_for_instance(args.instance_type)
+            logger.info(f"Using instance type: {args.instance_type} ({system_bandwidth} Gbps)")
+
+            checker = CapacityChecker(args.storage, args.object_key, system_bandwidth)
             results = await checker.check_capacity(args.object_key)
-            
+
             logger.info("Capacity check completed successfully")
             return 0
-            
+
         except Exception as e:
             logger.error(f"Error in capacity check phase: {e}")
-            return 1
-    
-    async def run_benchmark(self, args):
-        """Run the benchmark phase."""
-        try:
-            from cli.benchmark import BenchmarkRunner
-            
-            logger.info("=== Long-term Benchmark ===")
-            
-            runner = BenchmarkRunner(
-                storage_type=args.storage,
-                concurrency=args.concurrency,
-                object_key=args.object_key
-            )
-            
-            # Execute benchmark
-            results = await runner.run_benchmark()
-            
-            logger.info("Benchmark phase completed successfully")
-            return 0
-            
-        except Exception as e:
-            logger.error(f"Error in benchmark phase: {e}")
             return 1
     
     def run_visualize(self, args):
@@ -198,8 +188,6 @@ Examples:
                 return asyncio.run(self.run_upload(parsed_args))
             elif parsed_args.command == 'check':
                 return asyncio.run(self.run_check(parsed_args))
-            elif parsed_args.command == 'benchmark':
-                return asyncio.run(self.run_benchmark(parsed_args))
             elif parsed_args.command == 'visualize':
                 return self.run_visualize(parsed_args)
             else:

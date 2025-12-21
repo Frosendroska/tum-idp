@@ -22,16 +22,10 @@ if _project_root not in sys.path:
 from configuration import (
     OBJECT_SIZE_GB,
     RANGE_SIZE_MB,
-    R2_ACCESS_KEY_ID,
-    R2_SECRET_ACCESS_KEY,
-    AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY,
-    AWS_REGION,
     BYTES_PER_GB,
     BYTES_PER_MB,
 )
-from systems.r2 import R2System
-from systems.aws import AWSSystem
+from common.storage_factory import create_storage_system
 
 # Set up logging (only if not already configured)
 if not logging.root.handlers:
@@ -56,25 +50,7 @@ class Uploader:
     def _initialize_storage(self):
         """Initialize the appropriate storage system."""
         try:
-            if self.storage_type == "r2":
-                credentials = {
-                    "access_key_id": R2_ACCESS_KEY_ID,
-                    "secret_access_key": R2_SECRET_ACCESS_KEY,
-                    "region_name": "auto",
-                }
-                self.storage_system = R2System(credentials)
-
-            elif self.storage_type == "s3":
-                credentials = {
-                    "access_key_id": AWS_ACCESS_KEY_ID,
-                    "secret_access_key": AWS_SECRET_ACCESS_KEY,
-                    "region_name": AWS_REGION,
-                }
-                self.storage_system = AWSSystem(credentials)
-
-            else:
-                raise ValueError(f"Unsupported storage type: {self.storage_type}")
-
+            self.storage_system = create_storage_system(self.storage_type)
         except Exception as e:
             logger.error(
                 f"Failed to initialize {self.storage_type.upper()} storage: {e}"

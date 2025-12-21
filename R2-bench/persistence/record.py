@@ -1,26 +1,41 @@
 """
-Basic data structures for the R2 benchmark.
+Data structures for the R2 benchmark.
 """
 
 import time
+from dataclasses import dataclass, field
 
 
+@dataclass
 class BenchmarkRecord:
-    """Data structure for benchmark records."""
-    
-    def __init__(self, thread_id, conn_id, object_key, range_start, range_len, 
-                 bytes_downloaded, latency_ms, rtt_ms, http_status, concurrency, 
-                 phase_id: str = "", start_ts: float = None, end_ts: float = None):
-        self.thread_id = thread_id
-        self.conn_id = conn_id
-        self.object_key = object_key
-        self.range_start = range_start
-        self.range_len = range_len
-        self.bytes = bytes_downloaded
-        self.latency_ms = latency_ms
-        self.rtt_ms = rtt_ms
-        self.http_status = http_status
-        self.concurrency = concurrency
-        self.phase_id = phase_id
-        self.start_ts = start_ts or time.time()
-        self.end_ts = end_ts or time.time()
+    """Immutable data structure for benchmark records.
+
+    Attributes:
+        thread_id: ID of the worker thread
+        conn_id: ID of the connection
+        object_key: S3/R2 object key being accessed
+        range_start: Start byte position of the range request
+        range_len: Length of the range request in bytes
+        bytes: Number of bytes successfully downloaded
+        latency_ms: Total latency from request start to completion (ms)
+        rtt_ms: Round-trip time to first byte (ms)
+        http_status: HTTP status code of the response
+        concurrency: Number of concurrent workers during this request
+        phase_id: Identifier for the benchmark phase
+        start_ts: Request start timestamp (Unix epoch)
+        end_ts: Request end timestamp (Unix epoch)
+    """
+
+    thread_id: int
+    conn_id: int
+    object_key: str
+    range_start: int
+    range_len: int
+    bytes: int  # bytes_downloaded renamed to bytes for consistency
+    latency_ms: float
+    rtt_ms: float
+    http_status: int
+    concurrency: int
+    phase_id: str = ""
+    start_ts: float = field(default_factory=time.time)
+    end_ts: float = field(default_factory=time.time)
