@@ -10,6 +10,10 @@ import argparse
 import time
 from typing import Dict, Any
 
+# Disable boto3 verbose logging via environment variable BEFORE any boto3 imports
+os.environ['BOTO_DISABLE_COMMONNAME'] = '1'
+os.environ['AWS_LOG_LEVEL'] = 'ERROR'
+
 # Required: Use uvloop for better performance
 import uvloop
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
@@ -25,22 +29,31 @@ from configuration import (
     INITIAL_CONCURRENCY,
     RAMP_STEP_MINUTES,
     RAMP_STEP_CONCURRENCY,
-    MAX_CONCURRENCY,
     SECONDS_PER_MINUTE,
     PLATEAU_THRESHOLD,
 )
 from common.storage_factory import create_storage_system
+from common.instance_detector import InstanceDetector
 from persistence.parquet import ParquetPersistence
 from algorithms.plateau_check import PlateauCheck
 from algorithms.warm_up import WarmUp
 from algorithms.ramp import Ramp
-from common.worker_pool import WorkerPool
+from common.process_pool import ProcessPool
 
 # Set up logging (only if not already configured)
 if not logging.root.handlers:
     logging.basicConfig(
-        level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
+
+# Suppress verbose library loggers to reduce log duplication
+logging.getLogger('botocore').setLevel(logging.CRITICAL)
+logging.getLogger('botocore.credentials').setLevel(logging.CRITICAL)
+logging.getLogger('boto3').setLevel(logging.CRITICAL)
+logging.getLogger('aioboto3').setLevel(logging.CRITICAL)
+logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+logging.getLogger('s3transfer').setLevel(logging.CRITICAL)
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,34 +64,24 @@ class CapacityChecker:
         self,
         storage_type: str,
         object_key: str,
-        system_bandwidth_gbps: float,
     ):
         self.storage_type = storage_type.lower()
         self.object_key = object_key
-        self.system_bandwidth_gbps = system_bandwidth_gbps
-        self.storage_system = None
+
+        # Detect instance and load configuration
+        self.instance_detector = InstanceDetector()
+        self.instance_config = self.instance_detector.get_config()
+        self.system_bandwidth_gbps = self.instance_config.get('bandwidth_gbps', 10)
 
         # Initialize components
         self.persistence = ParquetPersistence()
 
-        # Shared worker pool for reuse across phases
-        self.worker_pool = None
-
-        # Initialize storage system
-        self._initialize_storage()
+        # Shared process pool for reuse across phases (multiprocessing for full CPU utilization)
+        self.process_pool = None
 
         logger.info(f"Initialized capacity checker for {storage_type.upper()}")
         logger.info(f"System bandwidth limit: {self.system_bandwidth_gbps} Gbps")
 
-    def _initialize_storage(self):
-        """Initialize the appropriate storage system."""
-        try:
-            self.storage_system = create_storage_system(self.storage_type)
-        except Exception as e:
-            logger.error(
-                f"Failed to initialize {self.storage_type.upper()} storage: {e}"
-            )
-            raise
 
     async def check_capacity(self, object_key: str = None):
         """Execute the refactored capacity discovery process."""
@@ -88,111 +91,142 @@ class CapacityChecker:
         logger.info("Starting capacity discovery process")
         logger.info(f"Using object key: {self.object_key}")
 
-        # Use storage system as async context manager
-        async with self.storage_system:
-            try:
-                # Check if object exists
-                logger.info("Checking if test object exists...")
-                response = await self.storage_system.client.head_object(
-                    Bucket=self.storage_system.bucket_name, Key=self.object_key
-                )
-                logger.info(f"Test object found: {response['ContentLength']} bytes")
-            except Exception as e:
-                logger.warning(f"Test object not found or error accessing it: {e}")
-                return
+        # Print instance configuration
+        self.instance_detector.print_configuration()
 
-            try:
-                # Initialize shared worker pool
-                self.worker_pool = WorkerPool(self.storage_system, self.persistence, MAX_CONCURRENCY)
+        try:
+            # Initialize process pool (multiprocessing for full CPU utilization)
+            self.process_pool = ProcessPool(
+                self.storage_type,
+                self.persistence,
+                instance_config=self.instance_config
+            )
 
-                # Phase 1: Warm-up using WarmUp class with shared worker pool
-                logger.info("=== Phase 1: Concurrent Warm-up ===")
+            # Use instance-specific concurrency for RAMP, but start warm-up conservatively
+            # Warm-up should be gentle to avoid memory spike
+            warmup_concurrency = INITIAL_CONCURRENCY
 
-                warm_up = WarmUp(
-                    worker_pool=self.worker_pool,
-                    warm_up_minutes=WARM_UP_MINUTES,
-                    concurrency=INITIAL_CONCURRENCY,
-                    object_key=self.object_key,
-                    system_bandwidth_gbps=self.system_bandwidth_gbps,
-                )
+            # Start ramp at a low value to properly discover optimal concurrency
+            initial_ramp_concurrency = warmup_concurrency
 
-                warm_up_results = await warm_up.execute()
+            # Use total_workers as max_concurrency (full system capacity)
+            # This is num_processes × workers_per_process × pipeline_depth
+            max_concurrency = self.instance_config.get('total_workers', 180)
 
+            # Phase 1: Warm-up (start conservatively)
+            logger.info("=== Phase 1: Concurrent Warm-up ===")
+            logger.info(f"Warm-up will use {warmup_concurrency} workers (conservative start)")
+
+            warm_up = WarmUp(
+                worker_pool=self.process_pool,
+                warm_up_minutes=WARM_UP_MINUTES,
+                concurrency=warmup_concurrency,  # Conservative start
+                object_key=self.object_key,
+                system_bandwidth_gbps=self.system_bandwidth_gbps,
+            )
+
+            warm_up_results = await warm_up.execute()
+
+            logger.info(
+                f"Warm-up completed: {warm_up_results['throughput_gbps']:.2f} Gbps"
+            )
+
+            # Phase 2: Ramp-up
+            logger.info("=== Phase 2: Ramp-up ===")
+            ramp_step = self.instance_config.get('ramp_step_size', RAMP_STEP_CONCURRENCY)
+            ramp_interval = self.instance_config.get('ramp_step_interval', RAMP_STEP_MINUTES * SECONDS_PER_MINUTE)
+
+            logger.info(
+                f"Starting ramp: {initial_ramp_concurrency} -> {max_concurrency}, step {ramp_step} every {ramp_interval}s"
+            )
+
+            ramp = Ramp(
+                worker_pool=self.process_pool,
+                initial_concurrency=initial_ramp_concurrency,  # Start ramp from configured initial
+                ramp_step=ramp_step,
+                step_duration_seconds=ramp_interval,
+                object_key=self.object_key,
+                plateau_threshold=PLATEAU_THRESHOLD,
+                system_bandwidth_gbps=self.system_bandwidth_gbps,
+            )
+
+            ramp_results = await ramp.find_optimal_concurrency(
+                max_concurrency=max_concurrency
+            )
+
+            # Report results
+            logger.info("=== Capacity Discovery Results ===")
+            logger.info(f"Best concurrency: {ramp_results['best_concurrency']}")
+            logger.info(
+                f"Best throughput: {ramp_results['best_throughput_gbps']:.2f} Gbps"
+            )
+            logger.info(f"Steps completed: {len(ramp_results['step_results'])}")
+            logger.info(f"Plateau detected: {ramp_results['plateau_detected']}")
+            logger.info(f"Plateau reason: {ramp_results['plateau_reason']}")
+
+            # Show step-by-step results
+            for i, step in enumerate(ramp_results["step_results"]):
                 logger.info(
-                    f"Warm-up completed: {warm_up_results['throughput_gbps']:.2f} Gbps"
+                    f"Step {i+1}: {step['concurrency']} conn -> {step['throughput_gbps']:.2f} Gbps"
                 )
 
-                # Phase 2: Ramp-up to find optimal concurrency using Ramp class with shared worker pool
-                logger.info("=== Phase 2: Ramp-up ===")
-                logger.info(
-                    f"Starting ramp: {INITIAL_CONCURRENCY} -> {MAX_CONCURRENCY}, step {RAMP_STEP_CONCURRENCY} every {RAMP_STEP_MINUTES}m"
+            # Save all collected benchmark data to Parquet
+            logger.info(f"\n=== Saving Benchmark Data ===")
+            total_records = len(self.persistence.records)
+            logger.info(f"Total records collected: {total_records}")
+
+            if total_records > 0:
+                parquet_file = self.persistence.save_to_file(
+                    filename_prefix=f"capacity_check_{self.storage_type}"
                 )
-
-                ramp = Ramp(
-                    worker_pool=self.worker_pool,
-                    initial_concurrency=INITIAL_CONCURRENCY,
-                    ramp_step=RAMP_STEP_CONCURRENCY,
-                    step_duration_seconds=RAMP_STEP_MINUTES * SECONDS_PER_MINUTE,
-                    object_key=self.object_key,
-                    plateau_threshold=PLATEAU_THRESHOLD,
-                    system_bandwidth_gbps=self.system_bandwidth_gbps,
-                )
-
-                ramp_results = await ramp.find_optimal_concurrency(
-                    max_concurrency=MAX_CONCURRENCY
-                )
-
-                # Save results to parquet
-                parquet_file = self.persistence.save_to_file("benchmark")
-
-                # Report results
-                logger.info("=== Capacity Discovery Results ===")
-                logger.info(f"Best concurrency: {ramp_results['best_concurrency']}")
-                logger.info(
-                    f"Best throughput: {ramp_results['best_throughput_gbps']:.2f} Gbps"
-                )
-                logger.info(f"Steps completed: {len(ramp_results['step_results'])}")
-                logger.info(f"Plateau detected: {ramp_results['plateau_detected']}")
-                logger.info(f"Plateau reason: {ramp_results['plateau_reason']}")
-
-                # Show step-by-step results
-                for i, step in enumerate(ramp_results["step_results"]):
-                    logger.info(
-                        f"Step {i+1}: {step['concurrency']} conn -> {step['throughput_gbps']:.2f} Gbps"
-                    )
-
                 if parquet_file:
-                    logger.info(f"Detailed results saved to: {parquet_file}")
+                    logger.info(f"✓ Benchmark data saved to: {parquet_file}")
+                else:
+                    logger.warning("✗ Failed to save benchmark data")
+            else:
+                logger.warning("✗ No records to save")
 
-                return {
-                    "warm_up": warm_up_results,
-                    "ramp_up": ramp_results,
-                    "optimal_concurrency": ramp_results["best_concurrency"],
-                    "max_throughput_gbps": ramp_results["best_throughput_gbps"],
-                    "plateau_detected": ramp_results["plateau_detected"],
-                    "plateau_reason": ramp_results["plateau_reason"],
-                }
+            # Print error summary from storage system metrics
+            logger.info(f"\n=== Connection Health Summary ===")
+            # Note: In multiprocess mode, each process has its own storage system
+            # so these metrics are per-process. For aggregate view, check Parquet file.
+            logger.info(f"Check logs above for:")
+            logger.info(f"  - [#X] Incomplete payload warnings (connection drops)")
+            logger.info(f"  - [TIMEOUT #X] Request timeouts")
+            logger.info(f"  - [THROTTLE #X] R2 throttling errors (HTTP 429/503)")
+            logger.info(f"If you see many errors, reduce concurrency in instance_profiles.yaml")
 
-            except KeyboardInterrupt:
-                logger.info("Benchmark interrupted by user (Ctrl+C)")
-                return {
-                    "warm_up": {"error": "Interrupted by user"},
-                    "ramp_up": {"error": "Interrupted by user"},
-                    "optimal_concurrency": 0,
-                    "max_throughput_gbps": 0,
-                    "plateau_detected": False,
-                    "plateau_reason": "Interrupted by user",
-                }
-            except Exception as e:
-                logger.error(f"Error during benchmark: {e}")
-                import traceback
+            return {
+                "warm_up": warm_up_results,
+                "ramp_up": ramp_results,
+                "optimal_concurrency": ramp_results["best_concurrency"],
+                "max_throughput_gbps": ramp_results["best_throughput_gbps"],
+                "plateau_detected": ramp_results["plateau_detected"],
+                "plateau_reason": ramp_results["plateau_reason"],
+                "total_records": total_records,
+                "parquet_file": parquet_file if total_records > 0 else None,
+            }
 
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                raise
-            finally:
-                # Cleanup shared worker pool
-                if self.worker_pool:
-                    await self.worker_pool.cleanup()
+        except KeyboardInterrupt:
+            logger.info("Benchmark interrupted by user (Ctrl+C)")
+            return {
+                "warm_up": {"error": "Interrupted by user"},
+                "ramp_up": {"error": "Interrupted by user"},
+                "optimal_concurrency": 0,
+                "max_throughput_gbps": 0,
+                "plateau_detected": False,
+                "plateau_reason": "Interrupted by user",
+            }
+        except Exception as e:
+            logger.error(f"Error during benchmark: {e}")
+            import traceback
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
+        finally:
+            # Cleanup process pool
+            if self.process_pool:
+                await self.process_pool.cleanup()
 
 
 async def main_async():
@@ -202,16 +236,12 @@ async def main_async():
         "--storage", choices=["r2", "s3"], default="r2", help="Storage type"
     )
     parser.add_argument("--object-key", help="Object key to test")
-    parser.add_argument(
-        "--worker-bandwidth", type=float, help="Worker bandwidth limit in Gbps"
-    )
 
     args = parser.parse_args()
 
     checker = CapacityChecker(
         storage_type=args.storage,
         object_key=args.object_key,
-        system_bandwidth_gbps=args.worker_bandwidth,
     )
 
     try:

@@ -31,34 +31,6 @@ R2_ACCESS_KEY_ID: str = os.getenv("R2_ACCESS_KEY_ID", "")
 R2_SECRET_ACCESS_KEY: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
 
 # =============================================================================
-# EC2 INSTANCE CONFIGURATIONS
-# =============================================================================
-
-# Maps instance type to vCPUs and maximum network bandwidth
-# Used for automatic bandwidth detection based on instance type
-INSTANCE_CONFIGS: Dict[str, Dict[str, int]] = {
-    "r5.xlarge": {
-        "vcpus": 4,
-        "max_bandwidth_gbps": 10,
-    },
-    "c5n.9xlarge": {
-        "vcpus": 36,
-        "max_bandwidth_gbps": 50,
-    },
-    "c6in.16xlarge": {
-        "vcpus": 64,
-        "max_bandwidth_gbps": 100,
-    },
-    "hpc7g.16xlarge": {
-        "vcpus": 64,
-        "max_bandwidth_gbps": 200,
-    },
-}
-
-# Default system bandwidth limit (fallback when instance type not specified)
-SYSTEM_BANDWIDTH_GBPS: float = 25.0
-
-# =============================================================================
 # TEST PARAMETERS
 # =============================================================================
 
@@ -77,8 +49,7 @@ INITIAL_CONCURRENCY: int = 8
 
 # Ramp-up phase
 RAMP_STEP_MINUTES: int = 5
-RAMP_STEP_CONCURRENCY: int = 32
-MAX_CONCURRENCY: int = 400
+RAMP_STEP_CONCURRENCY: int = 8
 
 # Steady state phase
 STEADY_STATE_HOURS: int = 3
@@ -87,8 +58,8 @@ STEADY_STATE_HOURS: int = 3
 # ALGORITHM PARAMETERS
 # =============================================================================
 
-PLATEAU_THRESHOLD: float = 0.2  # Minimum improvement threshold for plateau detection
-PEAK_DEGRADATION_THRESHOLD: float = 0.5  # Maximum degradation from historical peak
+PLATEAU_THRESHOLD: float = 0.05  # Minimum improvement threshold for plateau detection (5%)
+PEAK_DEGRADATION_THRESHOLD: float = 0.10  # Maximum degradation from historical peak (10%)
 ERROR_RETRY_DELAY: int = 1  # Delay between retries in seconds
 PROGRESS_INTERVAL: int = 50  # Log progress every N requests
 
@@ -130,12 +101,23 @@ THROUGHPUT_WINDOW_SIZE_SECONDS: float = 30.0  # Window size for throughput timel
 PER_SECOND_WINDOW_SIZE_SECONDS: float = 1.0  # Window size for per-second throughput calculations
 
 # =============================================================================
-# WORKER POOL DEFAULTS
+# WORKER POOL CONFIGURATION
 # =============================================================================
 
-DEFAULT_MAX_WORKERS: int = 500  # Default maximum number of workers
-DEFAULT_PERSISTENCE_BATCH_SIZE: int = 100  # Default batch size for persistence
 PERSISTENCE_FLUSH_INTERVAL_SECONDS: float = 1.0  # Flush interval for persistence queue
+
+WORKERS_PER_PROCESS: int = 8  # Number of async workers (coroutines) per process
+PIPELINE_DEPTH: int = 3  # Number of in-flight requests per worker
+EXECUTOR_THREADS_RATIO: float = 2.0  # Ratio for calculating executor threads: threads = workers × ratio
+
+# Max concurrency calculation: max_concurrency = (bandwidth_gbps × RTT × safety_factor) / request_size_gb
+MAX_CONCURRENCY_RTT_SECONDS: float = 0.1  # 100ms round-trip time
+MAX_CONCURRENCY_SAFETY_FACTOR: float = 2.0  # Safety factor for max concurrency calculation
+REQUEST_SIZE_GB: float = 0.8  # 100MB = 0.8 Gb
+
+CONNECTION_POOL_SAFETY_FACTOR: float = 1.5  # Safety factor for boto3 connection pool sizing
+BANDWIDTH_UTILIZATION_THRESHOLD: float = 0.95  # Stop ramping at 95% of bandwidth
+PERSISTENCE_BATCH_SIZE: int = 200  # Number of records to batch before writing
 
 # =============================================================================
 # CLI DEFAULTS
@@ -143,9 +125,3 @@ PERSISTENCE_FLUSH_INTERVAL_SECONDS: float = 1.0  # Flush interval for persistenc
 
 DEFAULT_OUTPUT_DIR: str = "results"
 DEFAULT_PLOTS_DIR: str = "plots"
-
-# =============================================================================
-# ALGORITHM DEFAULTS
-# =============================================================================
-
-DEFAULT_MAX_CONCURRENCY_RAMP: int = 100  # Default max concurrency for ramp algorithm

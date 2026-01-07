@@ -16,8 +16,9 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 from configuration import (
     OBJECT_SIZE_GB, DEFAULT_OBJECT_KEY,
-    DEFAULT_PLOTS_DIR, SYSTEM_BANDWIDTH_GBPS, INSTANCE_CONFIGS
+    DEFAULT_PLOTS_DIR
 )
+from common.instance_detector import InstanceDetector
 
 # Set up logging (only if not already configured)
 if not logging.root.handlers:
@@ -32,24 +33,10 @@ class SimpleR2BenchmarkCLI:
         self.parser = self._create_parser()
 
     @staticmethod
-    def _get_bandwidth_for_instance(instance_type: str) -> float:
-        """Get maximum bandwidth for a given instance type.
-
-        Args:
-            instance_type: EC2 instance type (e.g., 'r5.xlarge')
-
-        Returns:
-            Maximum bandwidth in Gbps, or default if instance type not found
-        """
-        if not instance_type:
-            return SYSTEM_BANDWIDTH_GBPS
-
-        config = INSTANCE_CONFIGS.get(instance_type)
-        if config:
-            return config["max_bandwidth_gbps"]
-
-        logger.warning(f"Unknown instance type '{instance_type}', using default bandwidth: {SYSTEM_BANDWIDTH_GBPS} Gbps")
-        return SYSTEM_BANDWIDTH_GBPS
+    def _get_available_instance_types():
+        """Get list of available instance types from instance profiles."""
+        detector = InstanceDetector()
+        return list(detector.profiles.keys())
     
     def _create_parser(self):
         """Create the main argument parser."""
@@ -87,7 +74,7 @@ Examples:
         check_parser.add_argument('--object-key', type=str, default=DEFAULT_OBJECT_KEY,
                                 help=f'Object key for the test object (default: {DEFAULT_OBJECT_KEY})')
         check_parser.add_argument('--instance-type', type=str, required=True,
-                                choices=list(INSTANCE_CONFIGS.keys()),
+                                choices=self._get_available_instance_types(),
                                 help=f'EC2 instance type')
 
         # Visualize command
@@ -127,11 +114,7 @@ Examples:
 
             logger.info("=== Capacity Discovery ===")
 
-            # Get bandwidth from instance type
-            system_bandwidth = self._get_bandwidth_for_instance(args.instance_type)
-            logger.info(f"Using instance type: {args.instance_type} ({system_bandwidth} Gbps)")
-
-            checker = CapacityChecker(args.storage, args.object_key, system_bandwidth)
+            checker = CapacityChecker(args.storage, args.object_key)
             results = await checker.check_capacity(args.object_key)
 
             logger.info("Capacity check completed successfully")

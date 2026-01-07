@@ -161,14 +161,14 @@ class ThroughputPlotter(BasePlotter):
             seconds.append(float(current_time))
             current_time += 1
         
-            # Use shared prorating utility
-            per_second_data = prorate_bytes_to_time_windows(
-                self.data,
-                seconds,
-                window_size_seconds=PER_SECOND_WINDOW_SIZE_SECONDS,
-                start_col='start_ts',
-                end_col='end_ts'
-            )
+        # Use shared prorating utility
+        per_second_data = prorate_bytes_to_time_windows(
+            self.data,
+            seconds,
+            window_size_seconds=PER_SECOND_WINDOW_SIZE_SECONDS,
+            start_col='start_ts',
+            end_col='end_ts'
+        )
         
         if per_second_data is None or len(per_second_data) == 0:
             return None

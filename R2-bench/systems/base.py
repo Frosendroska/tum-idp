@@ -2,18 +2,27 @@
 Async base classes for object storage systems with high-performance optimizations.
 """
 
+import logging
+
+# CRITICAL: Suppress boto3/botocore logging BEFORE importing aioboto3/botocore
+logging.getLogger('botocore').setLevel(logging.CRITICAL)
+logging.getLogger('botocore.credentials').setLevel(logging.CRITICAL)
+logging.getLogger('boto3').setLevel(logging.CRITICAL)
+logging.getLogger('aioboto3').setLevel(logging.CRITICAL)
+logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+logging.getLogger('s3transfer').setLevel(logging.CRITICAL)
+
 import aioboto3
 import botocore
 from botocore.config import Config
 from botocore.exceptions import ClientError
-import logging
 import time
 import asyncio
 import os
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional, Dict, Any, AsyncGenerator
 from urllib3.exceptions import IncompleteRead
 from botocore.exceptions import ReadTimeoutError
-from configuration import RANGE_SIZE_MB, MAX_CONCURRENCY, REQUEST_TIMEOUT_SECONDS
+from configuration import RANGE_SIZE_MB, REQUEST_TIMEOUT_SECONDS
 
 # Import aiohttp exceptions for payload error handling
 # aiohttp is a required dependency of aioboto3, so it's always available
@@ -33,26 +42,36 @@ except ImportError:
 class ObjectStorageSystem:
     """Async base class for object storage systems with CRT and connection pooling."""
 
-    def __init__(self, endpoint: str, bucket_name: str, credentials: dict):
+    def __init__(
+        self,
+        endpoint: str,
+        bucket_name: str,
+        credentials: dict,
+        instance_config: Dict[str, Any] = None,
+        verbose_init: bool = False
+    ):
         self.endpoint = endpoint
         self.bucket_name = bucket_name
         self.credentials = credentials
-        
-        # Verify CRT is actually available
+        self.instance_config = instance_config or {}
+
+        # Verify CRT is actually available (only log if verbose_init=True to reduce duplication)
         self._has_crt = False
         try:
             import awscrt
-            logger.info(f"✓ AWS CRT available: version {awscrt.__version__}")
+            if verbose_init:
+                logger.info(f"✓ AWS CRT available: version {awscrt.__version__}")
             self._has_crt = True
         except ImportError:
-            logger.warning(
-                "⚠️ AWS CRT not installed - performance will be severely limited!\n"
-                "Install with: pip install awscrt 'botocore[crt]'"
-            )
-        
+            if verbose_init:
+                logger.warning(
+                    "⚠️ AWS CRT not installed - performance will be severely limited!\n"
+                    "Install with: pip install awscrt 'botocore[crt]'"
+                )
+
         # Verify botocore CRT support (optional check)
         # Note: CRT support in botocore is automatically enabled if awscrt is installed
-        if self._has_crt:
+        if self._has_crt and verbose_init:
             try:
                 # Try to verify CRT is actually being used
                 # This is a best-effort check - CRT may still work even if this fails
@@ -63,17 +82,17 @@ class ObjectStorageSystem:
                 pass
         
         # Single source of truth for config
-        self._config = self._create_config()
-        
+        self._config = self._create_config(verbose=verbose_init)
+
         # Setup session
         self.session = aioboto3.Session(
             aws_access_key_id=credentials.get("access_key_id"),
             aws_secret_access_key=credentials.get("secret_access_key"),
             region_name=credentials.get("region_name", "auto"),
         )
-        
+
         self.client = None
-        
+
         # Performance metrics
         self._metrics = {
             'total_downloads': 0,
@@ -81,61 +100,69 @@ class ObjectStorageSystem:
             'failed_downloads': 0,
             'total_bytes': 0,
             'total_latency_ms': 0,
+            'incomplete_payload_errors': 0,  # Track incomplete payloads specifically
+            'timeout_errors': 0,
+            'throttle_errors': 0,
         }
         self._metrics_lock = asyncio.Lock()
-        
+
         # Connection monitoring
         self._download_count = 0
         self._last_conn_check = 0
-        
-        logger.info(
-            f"Initialized async storage for {endpoint} "
-            f"(max_pool_connections={self._config.max_pool_connections})"
-        )
-    
-    def _create_config(self) -> Config:
-        """Create optimized boto3 config with CRT support."""
-        # Calculate required connections
-        # With MAX_CONCURRENCY workers × 3 pipeline depth = potential concurrent requests
-        optimal_pool_size = MAX_CONCURRENCY * 3 + 100
-        actual_pool_size = min(optimal_pool_size, 2000)  # Cap at 2000
-        
-        if optimal_pool_size > 2000:
-            logger.warning(
-                f"Requested pool size ({optimal_pool_size}) exceeds maximum (2000). "
-                f"Consider reducing MAX_CONCURRENCY from {MAX_CONCURRENCY} to ~600"
+
+        if verbose_init:
+            logger.info(
+                f"Initialized async storage for {endpoint} "
+                f"(max_pool_connections={self._config.max_pool_connections})"
             )
-        
+    
+    def _create_config(self, verbose: bool = False) -> Config:
+        """Create optimized boto3 config based on instance configuration."""
+        # Get connection pool size from instance config
+        pool_size_per_process = self.instance_config.get('connection_pool_size', 100)
+
+        # For total pool size, multiply by safety factor
+        total_pool_size = min(
+            pool_size_per_process * 2,  # 2x safety margin
+            2000  # Hard cap
+        )
+
+        if verbose:
+            logger.info(f"Connection pool: {total_pool_size} connections (instance config: {pool_size_per_process})")
+
         config = Config(
             # Scale connection pool to actual concurrency
-            max_pool_connections=actual_pool_size,
-            
+            max_pool_connections=total_pool_size,
+
             # Connection timeouts
             connect_timeout=5,
-            read_timeout=60,  # Longer timeout for 100MB chunks
-            
+            read_timeout=120,  # Longer timeout for 100MB chunks
+
             # Adaptive retry strategy
             retries={
                 'max_attempts': 3,
                 'mode': 'adaptive',
             },
-            
+
             # S3-specific optimizations
             s3={
                 'use_accelerate_endpoint': False,
                 'payload_signing_enabled': False,  # Skip signing overhead
                 'addressing_style': 'virtual',  # or 'path' for R2
             },
-            
+
             # TCP keep-alive
             tcp_keepalive=True,
         )
-        
-        logger.info(f"Configured connection pool: {config.max_pool_connections} connections")
+
         return config
 
-    async def __aenter__(self):
-        """Async context manager entry."""
+    async def __aenter__(self) -> 'ObjectStorageSystem':
+        """Async context manager entry.
+
+        Returns:
+            Self for use in 'async with' statements
+        """
         # Reuse the single config instance
         self.client = await self.session.client(
             "s3",
@@ -144,11 +171,18 @@ class ObjectStorageSystem:
         ).__aenter__()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Async context manager exit.
+
+        Ensures proper cleanup of the S3 client connection.
+        """
         if self.client:
-            await self.client.__aexit__(exc_type, exc_val, exc_tb)
-            self.client = None
+            try:
+                await self.client.__aexit__(exc_type, exc_val, exc_tb)
+            except Exception as e:
+                logger.warning(f"Error closing S3 client: {e}")
+            finally:
+                self.client = None
     
     def get_connection_count(self) -> int:
         """Get number of established connections for this process."""
@@ -193,10 +227,13 @@ class ObjectStorageSystem:
                 f"Active connections: {conn_count}"
             )
 
+        response = None
+        body = None
+
         try:
             start_time = time.time()
             range_header = f"bytes={start}-{start + length - 1}"
-            
+
             # Add timeout wrapper around entire request
             response = await asyncio.wait_for(
                 self.client.get_object(
@@ -206,43 +243,46 @@ class ObjectStorageSystem:
                 ),
                 timeout=REQUEST_TIMEOUT_SECONDS  # Configurable timeout for request
             )
-            
+
             # Measure RTT (Time To First Byte) - time until response is received
             rtt_ms = (time.time() - start_time) * 1000
-            
+
             # Read body with timeout
             body = response["Body"]
             data = await asyncio.wait_for(
                 body.read(),
                 timeout=REQUEST_TIMEOUT_SECONDS  # Configurable timeout for reading body
             )
-            
+
             # Total latency includes both RTT and data transfer time
             latency_ms = (time.time() - start_time) * 1000
-            
+
             # Validate we got expected amount of data
             if len(data) != length:
                 logger.warning(
                     f"Incomplete read: expected {length} bytes, got {len(data)} bytes"
                 )
-            
+
             # Update metrics
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['successful_downloads'] += 1
                 self._metrics['total_bytes'] += len(data)
                 self._metrics['total_latency_ms'] += latency_ms
-            
+
             return data, latency_ms, rtt_ms
 
         except asyncio.TimeoutError:
-            logger.warning(
-                f"Timeout downloading {key} range {start}-{start+length-1} "
-                f"(download #{self._download_count})"
-            )
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
+                self._metrics['timeout_errors'] += 1
+                timeout_count = self._metrics['timeout_errors']
+
+            logger.warning(
+                f"[TIMEOUT #{timeout_count}] Request timeout for {key} range {start}-{start+length-1} "
+                f"after {REQUEST_TIMEOUT_SECONDS}s (likely R2 overload)"
+            )
             return None, 0, 0
         
         except IncompleteRead as e:
@@ -262,21 +302,25 @@ class ObjectStorageSystem:
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
             status_code = e.response.get('ResponseMetadata', {}).get('HTTPStatusCode', 0)
-            
-            # Highlight throttling errors
-            if status_code in (429, 503):
-                logger.error(
-                    f"🚨 R2 THROTTLING DETECTED: {error_code} (HTTP {status_code}) "
-                    f"for {key} range {start}-{start+length-1}"
-                )
-            else:
-                logger.error(
-                    f"S3 error {error_code} (HTTP {status_code}) for {key} "
-                    f"range {start}-{start+length-1}"
-                )
+
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
+
+                # Track throttling specifically
+                if status_code in (429, 503):
+                    self._metrics['throttle_errors'] += 1
+                    throttle_count = self._metrics['throttle_errors']
+
+                    logger.error(
+                        f"🚨 [THROTTLE #{throttle_count}] R2 THROTTLING: {error_code} (HTTP {status_code}) "
+                        f"for {key} range {start}-{start+length-1} - REDUCE CONCURRENCY!"
+                    )
+                else:
+                    logger.error(
+                        f"S3 error {error_code} (HTTP {status_code}) for {key} "
+                        f"range {start}-{start+length-1}"
+                    )
             return None, 0, 0
         
         except Exception as e:
@@ -284,16 +328,26 @@ class ObjectStorageSystem:
             # This happens when connection closes before all data is received
             error_type = type(e).__name__
             error_msg = str(e)
-            
+
             if isinstance(e, ClientPayloadError):
+                # Log ALL incomplete payloads to track R2 throttling
+                async with self._metrics_lock:
+                    self._metrics['incomplete_payload_errors'] += 1
+                    incomplete_count = self._metrics['incomplete_payload_errors']
+
                 logger.warning(
-                    f"Incomplete payload for {key} range {start}-{start+length-1}: "
-                    f"Connection closed before all data received. This is retryable."
+                    f"[#{incomplete_count}] Incomplete payload for {key} range {start}-{start+length-1}: "
+                    f"Connection closed mid-transfer (R2 throttling likely). Will retry."
                 )
             elif "ContentLengthError" in error_type or "Not enough data to satisfy content length" in error_msg:
+                # Log ALL content length errors
+                async with self._metrics_lock:
+                    self._metrics['incomplete_payload_errors'] += 1
+                    incomplete_count = self._metrics['incomplete_payload_errors']
+
                 logger.warning(
-                    f"Incomplete payload for {key} range {start}-{start+length-1}: "
-                    f"Content length mismatch. This is retryable."
+                    f"[#{incomplete_count}] Incomplete payload for {key} range {start}-{start+length-1}: "
+                    f"Content length mismatch. Will retry."
                 )
             else:
                 logger.error(
@@ -305,7 +359,15 @@ class ObjectStorageSystem:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
             return None, 0, 0
-    
+
+        finally:
+            # Always close the body stream to prevent connection leaks
+            if body is not None:
+                try:
+                    await body.close()
+                except Exception as e:
+                    logger.debug(f"Error closing response body: {e}")
+
     async def verify_connection(self) -> bool:
         """Verify storage connection and configuration."""
         if not self.client:
@@ -338,22 +400,39 @@ class ObjectStorageSystem:
             return False
     
     def get_metrics(self) -> Dict[str, Any]:
-        """Get performance metrics."""
+        """Get performance metrics with error breakdown."""
         metrics = self._metrics.copy()
+
         if metrics['successful_downloads'] > 0:
             metrics['avg_latency_ms'] = (
                 metrics['total_latency_ms'] / metrics['successful_downloads']
             )
+        else:
+            metrics['avg_latency_ms'] = 0
+
+        if metrics['total_downloads'] > 0:
             metrics['success_rate'] = (
                 metrics['successful_downloads'] / metrics['total_downloads']
             )
+            metrics['incomplete_payload_rate'] = (
+                metrics['incomplete_payload_errors'] / metrics['total_downloads']
+            )
+            metrics['timeout_rate'] = (
+                metrics['timeout_errors'] / metrics['total_downloads']
+            )
+            metrics['throttle_rate'] = (
+                metrics['throttle_errors'] / metrics['total_downloads']
+            )
         else:
-            metrics['avg_latency_ms'] = 0
             metrics['success_rate'] = 0
+            metrics['incomplete_payload_rate'] = 0
+            metrics['timeout_rate'] = 0
+            metrics['throttle_rate'] = 0
+
         return metrics
 
     async def upload_object_streaming(
-        self, key: str, data_generator, total_size: int, max_workers: int = 4
+        self, key: str, data_generator: AsyncGenerator[bytes, None], total_size: int, max_workers: int = 4
     ) -> bool:
         """Upload an object using async streaming concurrent multipart upload.
 
@@ -576,15 +655,15 @@ def verify_setup() -> bool:
     
     # 5. Configuration check
     try:
-        from configuration import MAX_CONCURRENCY
-        optimal_pool = MAX_CONCURRENCY * 3 + 100
-        actual_pool = min(optimal_pool, 2000)
-        print(f"✓ MAX_CONCURRENCY: {MAX_CONCURRENCY}")
-        print(f"✓ Optimal pool size: {actual_pool}")
-        if optimal_pool > 2000:
-            print(f"⚠ Pool size capped at 2000 (requested {optimal_pool})")
-    except ImportError as e:
-        print(f"⚠ Could not import configuration: {e}")
+        from common.instance_detector import InstanceDetector
+        detector = InstanceDetector()
+        config = detector.get_config()
+        max_concurrency = config.get('max_concurrency', 0)
+        connection_pool_size = config.get('connection_pool_size', 0)
+        print(f"✓ Max concurrency (calculated): {max_concurrency}")
+        print(f"✓ Connection pool per process: {connection_pool_size}")
+    except Exception as e:
+        print(f"⚠ Could not load instance configuration: {e}")
     
     print("=" * 60)
     
