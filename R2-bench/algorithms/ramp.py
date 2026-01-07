@@ -10,7 +10,6 @@ from configuration import (
     MAX_ERROR_RATE,
     MIN_REQUESTS_FOR_ERROR_CHECK,
     PROGRESS_INTERVAL,
-    DEFAULT_MAX_CONCURRENCY_RAMP,
 )
 from algorithms.plateau_check import PlateauCheck
 from common.worker_pool import WorkerPool
@@ -60,16 +59,36 @@ class Ramp:
         start_time = time.time()
         end_time = start_time + self.step_duration_seconds
 
-        # Wait for the step duration with simple progress logging
+        # Wait for the step duration with progress logging and diagnostics
+        last_log_time = start_time
         while time.time() < end_time:
             current_time = time.time()
             elapsed = current_time - start_time
             remaining = end_time - current_time
 
-            if int(elapsed) % PROGRESS_INTERVAL == 0 and int(elapsed) > 0:
-                logger.info(
-                    f"Step progress: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining"
-                )
+            # Log progress every 30 seconds with diagnostics
+            if (current_time - last_log_time) >= 30:
+                # Get current record count from persistence
+                if hasattr(self.worker_pool, 'persistence'):
+                    current_records = len(self.worker_pool.persistence.records)
+
+                    # Check if processes are alive (for ProcessPool)
+                    if hasattr(self.worker_pool, 'processes'):
+                        alive_processes = sum(1 for p in self.worker_pool.processes if p.is_alive())
+                        logger.info(
+                            f"Step progress: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining "
+                            f"({current_records} records, {alive_processes}/{len(self.worker_pool.processes)} processes alive)"
+                        )
+                    else:
+                        logger.info(
+                            f"Step progress: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining "
+                            f"({current_records} records collected so far)"
+                        )
+                else:
+                    logger.info(
+                        f"Step progress: {elapsed:.0f}s elapsed, {remaining:.0f}s remaining"
+                    )
+                last_log_time = current_time
 
             await asyncio.sleep(1)
 
@@ -101,10 +120,8 @@ class Ramp:
 
         return step_stats
 
-    async def find_optimal_concurrency(self, max_concurrency: int = None):
+    async def find_optimal_concurrency(self, max_concurrency: int):
         """Find optimal concurrency by ramping up until plateau is reached."""
-        if max_concurrency is None:
-            max_concurrency = DEFAULT_MAX_CONCURRENCY_RAMP
         current_concurrency = self.initial_concurrency
         best_throughput = 0
         best_concurrency = current_concurrency
@@ -157,15 +174,27 @@ class Ramp:
                     best_throughput = step_result["throughput_gbps"]
                     best_concurrency = current_concurrency
                     logger.info(
-                        f"New best: {best_concurrency} conn, {best_throughput:.2f} Gbps"
+                        f"✓ New best: {best_concurrency} workers → {best_throughput:.2f} Gbps"
                     )
 
                 # Check for plateau using plateau detection algorithm
                 plateau_reached, reason = self.plateau_checker.is_plateau_reached()
+
+                # Log plateau check result
                 if plateau_reached:
-                    logger.info(f"Plateau detected: {reason}")
-                    logger.info(f"Stopping ramp at {current_concurrency} connections")
+                    logger.info("=" * 70)
+                    logger.info("🛑 PLATEAU DETECTED - STOPPING RAMP")
+                    logger.info(f"   Reason: {reason}")
+                    logger.info(f"   Final concurrency: {current_concurrency} workers")
+                    logger.info(f"   Final throughput: {step_result['throughput_gbps']:.2f} Gbps")
+                    logger.info(f"   Best achieved: {best_throughput:.2f} Gbps at {best_concurrency} workers")
+                    logger.info("=" * 70)
                     break
+                else:
+                    logger.info(f"   Plateau check: {reason}")
+                    logger.debug(
+                        f"   Continuing ramp: next step will test {current_concurrency + self.ramp_step} workers"
+                    )
 
                 # Increase concurrency
                 current_concurrency += self.ramp_step

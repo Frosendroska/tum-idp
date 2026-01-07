@@ -19,11 +19,10 @@ from configuration import (
     MAX_CONSECUTIVE_ERRORS,
     PROGRESS_INTERVAL,
     OBJECT_SIZE_GB,
-    BITS_PER_BYTE,
-    GIGABITS_PER_GB,
-    DEFAULT_MAX_WORKERS,
-    DEFAULT_PERSISTENCE_BATCH_SIZE,
     PERSISTENCE_FLUSH_INTERVAL_SECONDS,
+    WORKERS_PER_PROCESS,
+    PIPELINE_DEPTH,
+    PERSISTENCE_BATCH_SIZE,
 )
 from common.metrics_utils import (
     calculate_phase_throughput_with_prorating,
@@ -40,24 +39,49 @@ class WorkerPool:
         self,
         storage_system,
         persistence: ParquetPersistence,
+        instance_config: Dict[str, Any] = None,
         max_workers: int = None,
-        pipeline_depth: int = 3,
+        pipeline_depth: int = None,
         persistence_batch_size: int = None,
+        result_queue = None,
+        process_id: int = 0,
+        shared_phase_id = None,
+        shared_object_key = None,
+        shared_concurrency_per_process = None,
     ):
         """Initialize the async worker pool.
 
         Args:
             storage_system: Async storage system to use for downloads
             persistence: Persistence object to store benchmark records
-            max_workers: Maximum number of concurrent workers (default: from configuration)
-            pipeline_depth: Number of in-flight requests per worker (pipelining)
-            persistence_batch_size: Number of records to batch before writing (default: from configuration)
+            instance_config: Instance-specific configuration dict (from InstanceDetector)
+            max_workers: Maximum number of concurrent workers (overrides config)
+            pipeline_depth: Number of in-flight requests per worker (overrides config)
+            persistence_batch_size: Number of records to batch before writing (overrides config)
+            result_queue: Multiprocessing queue for sending records to main process
+            process_id: Process identifier for tagging records
+            shared_phase_id: Shared value for phase transitions
+            shared_object_key: Shared value for object key
+            shared_concurrency_per_process: Shared value for concurrency
         """
+        # Load instance configuration
+        self.instance_config = instance_config or {}
+
+        # Use instance config with fallbacks
         self.storage_system = storage_system
         self.persistence = persistence
-        self.max_workers = max_workers or DEFAULT_MAX_WORKERS
-        self.pipeline_depth = pipeline_depth
-        self.persistence_batch_size = persistence_batch_size or DEFAULT_PERSISTENCE_BATCH_SIZE
+        self.max_workers = max_workers or self.instance_config.get('workers_per_process', WORKERS_PER_PROCESS)
+        self.pipeline_depth = pipeline_depth or self.instance_config.get('pipeline_depth', PIPELINE_DEPTH)
+        self.persistence_batch_size = persistence_batch_size or self.instance_config.get('persistence_batch_size', PERSISTENCE_BATCH_SIZE)
+
+        # Multiprocess support
+        self.result_queue = result_queue  # Send records to shared queue
+        self.process_id = process_id  # For record tagging
+
+        # Shared state for phase transitions
+        self.shared_phase_id = shared_phase_id
+        self.shared_object_key = shared_object_key
+        self.shared_concurrency_per_process = shared_concurrency_per_process
 
         # Worker management
         self.worker_tasks: List[asyncio.Task] = []
@@ -75,16 +99,27 @@ class WorkerPool:
         self.persistence_queue: asyncio.Queue = asyncio.Queue(maxsize=10000)
         self.persistence_task: Optional[asyncio.Task] = None
 
+        # CRITICAL FIX: Scale executor with instance config
+        executor_threads = self.instance_config.get(
+            'executor_threads_per_process',
+            max(20, self.max_workers // 2)  # Fallback calculation
+        )
+
         # Dedicated executor for persistence I/O (scaled with workers to prevent bottleneck)
         self._persistence_executor = ThreadPoolExecutor(
-            max_workers=max(20, self.max_workers // 2),  # Scale with workers, min 20
+            max_workers=executor_threads,
             thread_name_prefix="persistence"
         )
-        
+
+        logger.debug(
+            f"Created persistence executor with {executor_threads} threads "
+            f"for {self.max_workers} workers (pipeline={self.pipeline_depth})"
+        )
+
         # Executor monitoring
         self._executor_queue_warnings = 0
-        
-        # Pre-computed range cache for better performance (eliminates random.randint overhead)
+
+        # CRITICAL FIX: Larger range cache
         self._range_cache_size = max(
             10000,  # Minimum 10k ranges
             (OBJECT_SIZE_GB * BYTES_PER_GB // (RANGE_SIZE_MB * BYTES_PER_MB)) * 100  # 100x original
@@ -92,10 +127,13 @@ class WorkerPool:
         self._range_cache = self._precompute_ranges()
         self._range_index = 0
 
-        logger.info(
-            f"Initialized WorkerPool with max {self.max_workers} workers, "
-            f"pipeline_depth={pipeline_depth}, batch_size={persistence_batch_size}, "
-            f"persistence_threads={self._persistence_executor._max_workers}, "
+        logger.debug(f"Pre-computed {self._range_cache_size} random ranges")
+
+        mode = "multiprocess" if self.result_queue is not None else "single-process"
+        logger.debug(
+            f"Initialized WorkerPool (process {self.process_id}, {mode}) with max {self.max_workers} workers, "
+            f"pipeline_depth={self.pipeline_depth}, batch_size={self.persistence_batch_size}, "
+            f"persistence_threads={executor_threads}, "
             f"range_cache_size={self._range_cache_size}"
         )
 
@@ -103,10 +141,10 @@ class WorkerPool:
         """Pre-compute random range starts to avoid random.randint overhead during requests."""
         range_length = RANGE_SIZE_MB * BYTES_PER_MB
         max_start = (OBJECT_SIZE_GB * BYTES_PER_GB) - range_length
-        
+
         # Generate pre-computed random ranges
         ranges = [random.randint(0, max_start) for _ in range(self._range_cache_size)]
-        logger.info(f"Pre-computed {len(ranges)} range starts (0 to {max_start})")
+        logger.debug(f"Pre-computed {len(ranges)} range starts (0 to {max_start})")
         return ranges
 
     def _get_next_range_start(self) -> int:
@@ -126,18 +164,18 @@ class WorkerPool:
             phase_id: Phase identifier
         """
         self.current_phase_id = phase_id
-        logger.info(f"Began phase: {phase_id}")
+        logger.debug(f"Began phase: {phase_id}")
 
         if self.is_running:
-            logger.info(
+            logger.debug(
                 f"Adjusting worker pool from {self.active_workers} to {concurrency} workers"
             )
             await self._adjust_worker_count(concurrency, object_key)
         else:
-            logger.info(f"Starting worker pool with {concurrency} workers")
+            logger.debug(f"Starting worker pool with {concurrency} workers")
             await self._start_initial_workers(concurrency, object_key)
 
-        logger.info(f"Worker pool ready: {self.active_workers} workers")
+        logger.debug(f"Worker pool ready: {self.active_workers} workers")
 
     async def _start_initial_workers(self, concurrency: int, object_key: str):
         """Start the initial set of async workers."""
@@ -167,7 +205,7 @@ class WorkerPool:
             task = asyncio.create_task(self._worker_task(i))
             self.worker_tasks.append(task)
 
-        logger.info(f"Started {workers_needed} initial workers")
+        logger.debug(f"Started {workers_needed} initial workers")
 
     async def _adjust_worker_count(self, target_concurrency: int, object_key: str):
         """Adjust the number of active workers without stopping the pool."""
@@ -184,15 +222,16 @@ class WorkerPool:
                     "consecutive_errors": 0,
                     "requests_completed": 0,
                     "total_errors": 0,
+                    "timeout_warnings": 0,
                 }
             # Start additional workers
             for i in range(current_workers, target_workers):
                 task = asyncio.create_task(self._worker_task(i))
                 self.worker_tasks.append(task)
-            logger.info(f"Added {target_workers - current_workers} workers")
+            logger.debug(f"Added {target_workers - current_workers} workers")
         elif target_workers < current_workers:
             # Mark excess workers for stopping
-            logger.info(f"Reducing workers from {current_workers} to {target_workers}")
+            logger.debug(f"Reducing workers from {current_workers} to {target_workers}")
             self.active_workers = target_workers
         else:
             # No change needed, but update object key for existing workers
@@ -335,8 +374,9 @@ class WorkerPool:
             # Record request start time
             request_start_ts = time.time()
 
-            # Get current phase ID
-            phase_id = self.current_phase_id
+            # Get current phase ID from shared state (for phase transitions)
+            # Manager handles synchronization internally, no need for explicit locks
+            phase_id = self.shared_phase_id.value if (self.shared_phase_id and self.shared_phase_id.value) else self.current_phase_id
 
             # Download range with retry logic
             data = None
@@ -375,9 +415,9 @@ class WorkerPool:
             # Determine bytes downloaded
             bytes_downloaded = len(data) if data else 0
 
-            # Create benchmark record
+            # Create benchmark record (tag with process_id for multiprocess tracking)
             record = BenchmarkRecord(
-                thread_id=worker_id,
+                thread_id=worker_id + (self.process_id * 10000),  # Unique across processes
                 conn_id=worker_id,
                 object_key=object_key,
                 range_start=range_start,
@@ -392,12 +432,15 @@ class WorkerPool:
                 end_ts=request_end_ts,
             )
 
-            # Queue record for async persistence (non-blocking)
+            # Send to shared queue
             try:
-                self.persistence_queue.put_nowait(record)
-            except asyncio.QueueFull:
-                logger.warning(
-                    f"Persistence queue full, dropping record from worker {worker_id}"
+                # Non-blocking put to shared multiprocessing queue
+                self.result_queue.put_nowait(record)
+            except Exception as e:
+                # Queue full or error - log with details
+                logger.error(
+                    f"Process {self.process_id} worker {worker_id}: FAILED to send record to shared queue: "
+                    f"{type(e).__name__}: {e}"
                 )
 
             return http_status == 200
@@ -578,7 +621,7 @@ class WorkerPool:
         if not self.is_running:
             return
 
-        logger.info("Stopping worker pool...")
+        logger.debug("Stopping worker pool...")
         self.stop_event.set()
 
         # Wait for all worker tasks to complete
@@ -594,14 +637,24 @@ class WorkerPool:
         self.is_running = False
         self.worker_states.clear()
 
-        logger.info("Worker pool stopped")
+        logger.debug("Worker pool stopped")
 
-    async def cleanup(self):
-        """Clean up the worker pool."""
-        await self.stop_workers()
-        
+    async def cleanup(self) -> None:
+        """Clean up the worker pool.
+
+        Ensures proper cleanup of all resources including workers and thread executor.
+        """
+        try:
+            await self.stop_workers()
+        except Exception as e:
+            logger.error(f"Error stopping workers during cleanup: {e}")
+
         # Shutdown persistence executor
         if hasattr(self, '_persistence_executor'):
-            self._persistence_executor.shutdown(wait=True)
-        
-        logger.info("Worker pool cleaned up")
+            try:
+                self._persistence_executor.shutdown(wait=True, cancel_futures=True)
+                logger.debug("Persistence executor shutdown complete")
+            except Exception as e:
+                logger.warning(f"Error shutting down persistence executor: {e}")
+
+        logger.debug("Worker pool cleaned up")
