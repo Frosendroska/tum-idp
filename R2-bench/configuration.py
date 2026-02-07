@@ -1,16 +1,20 @@
 """
 Configuration constants for the R2 benchmark experiment.
 
-This module contains all configuration parameters including:
-- Cloud credentials and endpoints
-- Instance type configurations with bandwidth limits
-- Test parameters (object sizes, concurrency settings)
-- Algorithm parameters (thresholds, timeouts)
-- File size constants and conversion factors
+Architecture:
+- One process per CPU core for maximum parallelism
+- Each process runs async workers (coroutines)
+- Each worker pipelines multiple HTTP requests
+- Dynamic ramping: workers_per_core increases during ramp-up phase
+
+Hierarchy:
+- cores (vCPUs) - detected at runtime
+- workers_per_core - starts at INITIAL_WORKERS_PER_CORE, ramps up
+- total_workers = cores × workers_per_core
+- concurrency = total_workers × pipeline_depth (HTTP requests in flight)
 """
 
 import os
-from typing import Dict
 
 # =============================================================================
 # CLOUD STORAGE CONFIGURATION
@@ -45,11 +49,11 @@ DEFAULT_OBJECT_KEY: str = "test-object-9gb"
 
 # Warm-up phase
 WARM_UP_MINUTES: int = 1
-INITIAL_CONCURRENCY: int = 8
+INITIAL_WORKERS_PER_CORE: int = 8  # Start with 8 workers per core
 
 # Ramp-up phase
 RAMP_STEP_MINUTES: int = 5
-RAMP_STEP_CONCURRENCY: int = 8
+RAMP_STEP_WORKERS_PER_CORE: int = 4  # Add 4 workers per core each step (reduced from 8 for gradual scaling)
 
 # Steady state phase
 STEADY_STATE_HOURS: int = 3
@@ -58,8 +62,8 @@ STEADY_STATE_HOURS: int = 3
 # ALGORITHM PARAMETERS
 # =============================================================================
 
-PLATEAU_THRESHOLD: float = 0.05  # Minimum improvement threshold for plateau detection (5%)
-PEAK_DEGRADATION_THRESHOLD: float = 0.10  # Maximum degradation from historical peak (10%)
+PLATEAU_THRESHOLD: float = 0.05  # Minimum improvement threshold (5%)
+PEAK_DEGRADATION_THRESHOLD: float = 0.10  # Maximum degradation from peak (10%)
 ERROR_RETRY_DELAY: int = 1  # Delay between retries in seconds
 PROGRESS_INTERVAL: int = 50  # Log progress every N requests
 
@@ -69,11 +73,15 @@ PROGRESS_INTERVAL: int = 50  # Log progress every N requests
 
 MAX_ERROR_RATE: float = 0.2  # 20% error rate threshold
 MIN_REQUESTS_FOR_ERROR_CHECK: int = 10  # Minimum requests before checking error rate
-MAX_CONSECUTIVE_ERRORS: int = 20  # Stop after this many consecutive errors
+MAX_CONSECUTIVE_ERRORS: int = 100  # Increased from 20 - for capacity discovery we want to push limits
 MAX_RETRIES: int = 3  # Maximum number of retry attempts
+ERROR_BACKOFF_ENABLED: bool = True  # Enable exponential backoff instead of stopping on errors
+ERROR_BACKOFF_MAX_SECONDS: int = 5  # Maximum backoff delay (seconds)
 
-# Request timeout configuration (4x longer for 100MB chunks)
-REQUEST_TIMEOUT_SECONDS: int = 120
+# Request timeout configuration
+# At high concurrency, R2 may queue requests, causing delays
+# 60s allows for ~30s queue time + ~30s transfer time
+REQUEST_TIMEOUT_SECONDS: int = 60  # 60 seconds for 100MB chunks (balanced for R2 queuing)
 
 # =============================================================================
 # HTTP STATUS CODES
@@ -104,20 +112,31 @@ PER_SECOND_WINDOW_SIZE_SECONDS: float = 1.0  # Window size for per-second throug
 # WORKER POOL CONFIGURATION
 # =============================================================================
 
-PERSISTENCE_FLUSH_INTERVAL_SECONDS: float = 1.0  # Flush interval for persistence queue
+# Per-core limits
+MAX_WORKERS_PER_CORE: int = 256  # Maximum async workers per core (safety limit for memory)
 
-WORKERS_PER_PROCESS: int = 8  # Number of async workers (coroutines) per process
-PIPELINE_DEPTH: int = 3  # Number of in-flight requests per worker
-EXECUTOR_THREADS_RATIO: float = 2.0  # Ratio for calculating executor threads: threads = workers × ratio
+# Pipeline configuration
+PIPELINE_DEPTH: int = 3  # Number of in-flight HTTP requests per worker
 
-# Max concurrency calculation: max_concurrency = (bandwidth_gbps × RTT × safety_factor) / request_size_gb
-MAX_CONCURRENCY_RTT_SECONDS: float = 0.1  # 100ms round-trip time
-MAX_CONCURRENCY_SAFETY_FACTOR: float = 2.0  # Safety factor for max concurrency calculation
-REQUEST_SIZE_GB: float = 0.8  # 100MB = 0.8 Gb
+# Executor threads (for blocking disk I/O only)
+EXECUTOR_THREADS_PER_CORE: int = 2  # Minimal threads for disk writes
 
-CONNECTION_POOL_SAFETY_FACTOR: float = 1.5  # Safety factor for boto3 connection pool sizing
-BANDWIDTH_UTILIZATION_THRESHOLD: float = 0.95  # Stop ramping at 95% of bandwidth
+# Persistence configuration
 PERSISTENCE_BATCH_SIZE: int = 200  # Number of records to batch before writing
+PERSISTENCE_FLUSH_INTERVAL_SECONDS: float = 15.0  # Flush to disk every 15s to free memory (reduced from 30s for aggressive memory management)
+CONSOLIDATION_BATCH_SIZE: int = 50  # Number of parquet files to process per batch during consolidation (reduces memory usage)
+
+# Network configuration
+CONNECTION_POOL_SAFETY_FACTOR: float = 1.5  # Safety factor for boto3 connection pool sizing
+
+# SSL Configuration
+# Disabling SSL removes encryption overhead (~30-50% CPU), enabling 40-50 Gbps throughput
+# Safe for benchmarking with synthetic test data (random 9GB object)
+# Re-enable (set to False) if testing with sensitive/production data or compliance requirements
+DISABLE_SSL_VERIFICATION: bool = True  # True = max throughput, False = encrypted transfers
+
+# Benchmark control
+BANDWIDTH_UTILIZATION_THRESHOLD: float = 0.95  # Stop ramping at 95% of bandwidth
 
 # =============================================================================
 # CLI DEFAULTS

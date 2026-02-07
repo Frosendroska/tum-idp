@@ -20,7 +20,7 @@ class BenchmarkRecord:
         latency_ms: Total latency from request start to completion (ms)
         rtt_ms: Round-trip time to first byte (ms)
         http_status: HTTP status code of the response
-        concurrency: Number of concurrent workers during this request
+        concurrency: Total concurrent HTTP requests in flight (= total_workers × pipeline_depth)
         phase_id: Identifier for the benchmark phase
         start_ts: Request start timestamp (Unix epoch)
         end_ts: Request end timestamp (Unix epoch)
@@ -35,7 +35,7 @@ class BenchmarkRecord:
     latency_ms: float
     rtt_ms: float
     http_status: int
-    concurrency: int
+    concurrency: int  # Total concurrent HTTP requests (workers × cores × pipeline_depth)
     phase_id: str = ""
     start_ts: float = field(default_factory=time.time)
     end_ts: float = field(default_factory=time.time)

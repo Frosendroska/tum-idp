@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class R2System(ObjectStorageSystem):
     """Cloudflare R2 object storage system."""
 
-    def __init__(self, credentials: dict = None, instance_config: Dict[str, Any] = None, verbose_init: bool = False):
+    def __init__(self, credentials: dict = None, verbose_init: bool = False, workers_per_core: int = None):
         if credentials is None:
             credentials = {}
 
@@ -21,8 +21,8 @@ class R2System(ObjectStorageSystem):
             endpoint=R2_ENDPOINT,
             bucket_name=BUCKET_NAME,
             credentials=credentials,
-            instance_config=instance_config,
-            verbose_init=verbose_init
+            verbose_init=verbose_init,
+            workers_per_core=workers_per_core
         )
         if verbose_init:
             logger.info("Initialized R2 system")
