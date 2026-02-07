@@ -47,13 +47,13 @@ class ObjectStorageSystem:
         endpoint: str,
         bucket_name: str,
         credentials: dict,
-        instance_config: Dict[str, Any] = None,
-        verbose_init: bool = False
+        verbose_init: bool = False,
+        workers_per_core: int = None
     ):
         self.endpoint = endpoint
         self.bucket_name = bucket_name
         self.credentials = credentials
-        self.instance_config = instance_config or {}
+        self.workers_per_core = workers_per_core  # Store for config calculation
 
         # Verify CRT is actually available (only log if verbose_init=True to reduce duplication)
         self._has_crt = False
@@ -69,19 +69,22 @@ class ObjectStorageSystem:
                     "Install with: pip install awscrt 'botocore[crt]'"
                 )
 
-        # Verify botocore CRT support (optional check)
-        # Note: CRT support in botocore is automatically enabled if awscrt is installed
+        # Note about CRT and aiobotocore
+        # IMPORTANT: aiobotocore uses aiohttp, NOT AWS CRT, even if awscrt is installed
+        # CRT is only used by synchronous boto3, not by aiobotocore's async client
         if self._has_crt and verbose_init:
             try:
-                # Try to verify CRT is actually being used
-                # This is a best-effort check - CRT may still work even if this fails
                 import botocore
                 logger.info(f"✓ botocore version: {botocore.__version__}")
-                logger.info("✓ CRT should be enabled (awscrt is installed)")
+                logger.info(f"✓ awscrt is installed (version {awscrt.__version__})")
+                logger.warning(
+                    "⚠️  NOTE: aiobotocore uses aiohttp (not CRT) for HTTP transport.\n"
+                    "    Performance depends on aiohttp.TCPConnector limits, which we configure below."
+                )
             except Exception:
                 pass
-        
-        # Single source of truth for config
+
+        # Single source of truth for config (includes aiohttp connector config)
         self._config = self._create_config(verbose=verbose_init)
 
         # Setup session
@@ -116,26 +119,42 @@ class ObjectStorageSystem:
                 f"(max_pool_connections={self._config.max_pool_connections})"
             )
     
-    def _create_config(self, verbose: bool = False) -> Config:
-        """Create optimized boto3 config based on instance configuration."""
-        # Get connection pool size from instance config
-        pool_size_per_process = self.instance_config.get('connection_pool_size', 100)
+    def _create_config(self, verbose: bool = False):
+        """Create optimized config for multiprocessing + async architecture."""
+        from configuration import INITIAL_WORKERS_PER_CORE, MAX_WORKERS_PER_CORE, PIPELINE_DEPTH, CONNECTION_POOL_SAFETY_FACTOR
+        from botocore.config import Config
 
-        # For total pool size, multiply by safety factor
+        # Calculate connection pool size based on ACTUAL workers_per_core if provided
+        # Otherwise use MAX_WORKERS_PER_CORE for safety (handles ramp-up)
+        # In multiprocessing architecture, each process has its own connection pool
+        workers_per_core = self.workers_per_core if self.workers_per_core else MAX_WORKERS_PER_CORE
+
+        # IMPORTANT: This is PER PROCESS concurrency, not system-wide
+        max_concurrency = workers_per_core * PIPELINE_DEPTH
         total_pool_size = min(
-            pool_size_per_process * 2,  # 2x safety margin
-            2000  # Hard cap
+            int(max_concurrency * CONNECTION_POOL_SAFETY_FACTOR),
+            3000  # Hard cap (increased from 2000)
         )
 
+        # Store max_concurrency for connector creation in __aenter__
+        self._max_concurrency = max_concurrency
+
         if verbose:
-            logger.info(f"Connection pool: {total_pool_size} connections (instance config: {pool_size_per_process})")
+            logger.info(
+                f"boto3 config (per process): max_pool_connections={total_pool_size} "
+                f"(workers_per_core={workers_per_core}, max_concurrency={max_concurrency}, safety_factor={CONNECTION_POOL_SAFETY_FACTOR})"
+            )
+            logger.info(
+                f"✓ aiohttp connector will be configured: limit={max_concurrency + 200} "
+                f"(workers_per_core={workers_per_core} × pipeline={PIPELINE_DEPTH} + buffer)"
+            )
 
         config = Config(
             # Scale connection pool to actual concurrency
             max_pool_connections=total_pool_size,
 
             # Connection timeouts
-            connect_timeout=5,
+            connect_timeout=30,  # Increased from 5s - at high concurrency, establishing connections takes time
             read_timeout=120,  # Longer timeout for 100MB chunks
 
             # Adaptive retry strategy
@@ -163,18 +182,61 @@ class ObjectStorageSystem:
         Returns:
             Self for use in 'async with' statements
         """
-        # Reuse the single config instance
+        import aiohttp
+        from functools import wraps
+        from configuration import DISABLE_SSL_VERIFICATION
+
+        # CRITICAL FIX: Monkey-patch aiohttp.TCPConnector to use high connection limits
+        # aiobotocore creates its own connector internally with default limit=100
+        # We need to intercept connector creation and inject our custom limits
+        connector_limit = self._max_concurrency + 200  # Increased buffer for safety
+
+        # Store original TCPConnector __init__
+        original_tcp_connector_init = aiohttp.TCPConnector.__init__
+
+        @wraps(original_tcp_connector_init)
+        def patched_tcp_connector_init(self_connector, *args, **kwargs):
+            # Override limit and limit_per_host if not explicitly set
+            if 'limit' not in kwargs:
+                kwargs['limit'] = connector_limit
+            if 'limit_per_host' not in kwargs:
+                kwargs['limit_per_host'] = 0  # Unlimited per host
+            # CRITICAL: Disable SSL verification for maximum throughput
+            # At 50 Gbps, SSL/TLS encryption overhead is the primary bottleneck
+            # This is safe for capacity discovery testing (not for production)
+            if 'ssl' not in kwargs and DISABLE_SSL_VERIFICATION:
+                kwargs['ssl'] = False
+            # Call original __init__ with modified kwargs
+            return original_tcp_connector_init(self_connector, *args, **kwargs)
+
+        # Apply monkey patch
+        aiohttp.TCPConnector.__init__ = patched_tcp_connector_init
+
+        ssl_status = "SSL disabled" if DISABLE_SSL_VERIFICATION else "SSL enabled"
+        logger.info(
+            f"✓ aiohttp.TCPConnector patched: limit={connector_limit} connections, {ssl_status}"
+        )
+
+        # Create client - it will now use our patched connector
         self.client = await self.session.client(
             "s3",
             endpoint_url=self.endpoint,
-            config=self._config,  # Use existing config
+            config=self._config,
         ).__aenter__()
+
+        # Restore original TCPConnector __init__ (clean up monkey patch)
+        aiohttp.TCPConnector.__init__ = original_tcp_connector_init
+
+        ssl_info = " (SSL disabled for max throughput)" if DISABLE_SSL_VERIFICATION else " (SSL enabled)"
+        logger.info(f"✓ Client created with high-performance connector{ssl_info}")
+
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         """Async context manager exit.
 
         Ensures proper cleanup of the S3 client connection.
+        aiobotocore will automatically clean up the aiohttp connector.
         """
         if self.client:
             try:
@@ -183,6 +245,8 @@ class ObjectStorageSystem:
                 logger.warning(f"Error closing S3 client: {e}")
             finally:
                 self.client = None
+
+        logger.debug("Storage system cleanup complete")
     
     def get_connection_count(self) -> int:
         """Get number of established connections for this process."""
@@ -337,7 +401,7 @@ class ObjectStorageSystem:
 
                 logger.warning(
                     f"[#{incomplete_count}] Incomplete payload for {key} range {start}-{start+length-1}: "
-                    f"Connection closed mid-transfer (R2 throttling likely). Will retry."
+                    f"Connection closed mid-transfer (network issue or throttling). Will retry."
                 )
             elif "ContentLengthError" in error_type or "Not enough data to satisfy content length" in error_msg:
                 # Log ALL content length errors
@@ -583,7 +647,8 @@ class ObjectStorageSystem:
                     await self.client.abort_multipart_upload(
                         Bucket=self.bucket_name, Key=key, UploadId=upload_id
                     )
-            except:
+            except Exception:
+                # Silently ignore cleanup errors
                 pass
             return False
 
@@ -603,73 +668,3 @@ class ObjectStorageSystem:
         except Exception as e:
             logger.error(f"Failed to upload part {part_number}: {e}")
             return None
-
-
-def verify_setup() -> bool:
-    """Verify CRT and configuration before benchmark.
-    
-    Returns:
-        True if setup is correct, False otherwise
-    """
-    print("=" * 60)
-    print("PERFORMANCE SETUP VERIFICATION")
-    print("=" * 60)
-    
-    all_ok = True
-    
-    # 1. Check CRT
-    try:
-        import awscrt
-        print(f"✓ AWS CRT installed: version {awscrt.__version__}")
-    except ImportError:
-        print("✗ AWS CRT NOT INSTALLED - CRITICAL PERFORMANCE ISSUE!")
-        print("  Install with: pip install awscrt 'botocore[crt]'")
-        all_ok = False
-    
-    # 2. Check botocore version
-    try:
-        import botocore
-        print(f"✓ botocore version: {botocore.__version__}")
-        # CRT support is automatically enabled if awscrt is installed
-        if all_ok:  # Only show this if CRT is installed
-            print("✓ botocore CRT support: should be enabled (awscrt is installed)")
-    except ImportError:
-        print("✗ botocore not installed")
-        all_ok = False
-    
-    # 3. Check aioboto3
-    try:
-        import aioboto3
-        print(f"✓ aioboto3 installed")
-    except ImportError:
-        print("✗ aioboto3 not installed")
-        all_ok = False
-    
-    # 4. Check psutil for monitoring
-    try:
-        import psutil
-        print(f"✓ psutil available for connection monitoring")
-    except ImportError:
-        print("⚠ psutil not available (optional, for monitoring)")
-        print("  Install with: pip install psutil")
-    
-    # 5. Configuration check
-    try:
-        from common.instance_detector import InstanceDetector
-        detector = InstanceDetector()
-        config = detector.get_config()
-        max_concurrency = config.get('max_concurrency', 0)
-        connection_pool_size = config.get('connection_pool_size', 0)
-        print(f"✓ Max concurrency (calculated): {max_concurrency}")
-        print(f"✓ Connection pool per process: {connection_pool_size}")
-    except Exception as e:
-        print(f"⚠ Could not load instance configuration: {e}")
-    
-    print("=" * 60)
-    
-    if not all_ok:
-        print("\n⚠️ Setup verification failed. Fix issues before benchmarking.")
-    else:
-        print("\n✓ Setup verification passed. Ready for benchmarking.")
-    
-    return all_ok

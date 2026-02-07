@@ -50,11 +50,20 @@ class ParquetPersistence:
         with self._lock:
             self.records.append(record)
 
-    def save_to_file(self, filename_prefix: str = "benchmark") -> Optional[str]:
+    def add_records(self, records: List[BenchmarkRecord]) -> None:
+        """Store multiple benchmark records in memory (thread-safe batch operation).
+
+        Args:
+            records: List of benchmark records to store
+        """
+        with self._lock:
+            self.records.extend(records)
+
+    def save_to_parquet(self, filename_prefix: str = "capacity_check_r2") -> Optional[str]:
         """Save all records to a Parquet file (thread-safe).
 
         Args:
-            filename_prefix: Prefix for the generated filename (default: 'benchmark')
+            filename_prefix: Prefix for the generated filename (default: 'capacity_check_r2')
 
         Returns:
             Path to the saved file, or None if no records to save
@@ -96,7 +105,61 @@ class ParquetPersistence:
         try:
             df.to_parquet(filepath, index=False, compression='snappy')
             logger.info(f"Successfully saved {len(df)} records to: {filepath}")
+            # Store the filepath for later reference
+            self.output_file = filepath
             return filepath
         except Exception as e:
             logger.error(f"Failed to save records to Parquet: {e}", exc_info=True)
+            return None
+
+    def save_to_file(self, filename_prefix: str = "benchmark") -> Optional[str]:
+        """Alias for save_to_parquet for backward compatibility."""
+        return self.save_to_parquet(filename_prefix)
+
+    def save_records_to_parquet(self, records: List[BenchmarkRecord], filename_prefix: str) -> Optional[str]:
+        """Save provided records directly to a Parquet file (for periodic flushing).
+
+        Args:
+            records: List of benchmark records to save
+            filename_prefix: Prefix for the generated filename
+
+        Returns:
+            Path to the saved file, or None if no records to save
+        """
+        if not records:
+            return None
+
+        # Convert records to DataFrame
+        data = []
+        for record in records:
+            data.append({
+                'thread_id': record.thread_id,
+                'conn_id': record.conn_id,
+                'object_key': record.object_key,
+                'range_start': record.range_start,
+                'range_len': record.range_len,
+                'bytes': record.bytes,
+                'latency_ms': record.latency_ms,
+                'rtt_ms': record.rtt_ms,
+                'http_status': record.http_status,
+                'concurrency': record.concurrency,
+                'phase_id': record.phase_id,
+                'start_ts': record.start_ts,
+                'end_ts': record.end_ts
+            })
+
+        df = pd.DataFrame(data)
+
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{filename_prefix}_{timestamp}.parquet"
+        filepath = os.path.join(self.output_dir, filename)
+
+        # Save to Parquet
+        try:
+            df.to_parquet(filepath, index=False, compression='snappy')
+            logger.debug(f"Saved {len(df)} records to: {filepath}")
+            return filepath
+        except Exception as e:
+            logger.error(f"Failed to save records to Parquet: {e}")
             return None

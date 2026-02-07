@@ -112,8 +112,9 @@ class PlateauCheck:
                 if third_throughput > 0:
                     prev_improvement = (prev_throughput - third_throughput) / third_throughput
 
-                    # Both recent steps show minimal improvement
-                    if abs(improvement) < self.threshold and abs(prev_improvement) < self.threshold:
+                    # Both recent steps show minimal improvement or degradation
+                    # Don't use abs() - negative improvement (degradation) should also trigger plateau
+                    if improvement < self.threshold and prev_improvement < self.threshold:
                         return True, (
                             f"Throughput plateau detected: last 2 steps improved by "
                             f"{improvement:.1%} and {prev_improvement:.1%} "
@@ -121,12 +122,11 @@ class PlateauCheck:
                             f"Current: {latest_throughput:.2f} Gbps"
                         )
 
-        # Still improving significantly
-        if len(self.measurements) >= 2:
-            improvement = ((latest_throughput - prev_throughput) / prev_throughput) if prev_throughput > 0 else 0
+            # Still improving significantly (improvement already calculated above)
             return False, f"Throughput still improving: +{improvement:.1%} in last step"
 
-        return False, "Throughput still improving"
+        # Insufficient measurements for trend detection
+        return False, "Need more measurements for plateau detection"
     
     def get_plateau_summary(self) -> dict:
         """Get comprehensive summary of plateau detection results.
