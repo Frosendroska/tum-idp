@@ -1,0 +1,21 @@
+
+R2 Benchmark Summary Report
+===========================
+
+Data Source: r2-results/3-attempt/c6in-32xlarge-capacity_check_r2_20260208_125035.parquet
+Total Records: 118,379
+Successful Requests: 118,379
+Success Rate: 100.00%
+
+Duration: 0.26 hours
+Total Data: 11560.45 GB
+Average Throughput: 104.16 Gbps
+
+Latency Statistics (ms):
+  Average: 5830.8
+  P50: 5270.3
+  P95: 11794.4
+  P99: 14849.1
+
+Concurrency Levels: [np.int64(384), np.int64(768), np.int64(1152), np.int64(1536)]
+            
