@@ -1,0 +1,21 @@
+
+R2 Benchmark Summary Report
+===========================
+
+Data Source: r2-results/3-attempt/hpc7a-capacity_check_r2_20260208_000827.parquet
+Total Records: 36,072
+Successful Requests: 36,072
+Success Rate: 100.00%
+
+Duration: 0.19 hours
+Total Data: 3522.66 GB
+Average Throughput: 44.92 Gbps
+
+Latency Statistics (ms):
+  Average: 4613.6
+  P50: 3498.1
+  P95: 10837.2
+  P99: 20548.9
+
+Concurrency Levels: [np.int64(192), np.int64(384), np.int64(576)]
+            

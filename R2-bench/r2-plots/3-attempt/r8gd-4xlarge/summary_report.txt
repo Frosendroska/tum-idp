@@ -1,0 +1,21 @@
+
+R2 Benchmark Summary Report
+===========================
+
+Data Source: results/capacity_check_r2_20260207_170215.parquet
+Total Records: 13,233
+Successful Requests: 13,233
+Success Rate: 100.00%
+
+Duration: 0.24 hours
+Total Data: 1292.29 GB
+Average Throughput: 12.86 Gbps
+
+Latency Statistics (ms):
+  Average: 6086.1
+  P50: 5566.0
+  P95: 11536.2
+  P99: 13793.3
+
+Concurrency Levels: [np.int64(48), np.int64(96), np.int64(144), np.int64(192)]
+            
