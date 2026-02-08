@@ -86,11 +86,11 @@ python3 cli.py check --storage r2 \
 
 ---
 
-## c6in.16xlarge - Very High Throughput (100 Gbps)
+## c6in.16xlarge - Very High Throughput (100 Gbps) ✅ Tested
 
 **Specs:** 64 vCPUs, 100 Gbps, 128 GB RAM
 **Cost:** $3.36/hour
-**Use case:** Confirm R2 capacity ceiling
+**Use case:** High-bandwidth R2 testing
 
 ```bash
 python3 cli.py check --storage r2 \
@@ -98,27 +98,92 @@ python3 cli.py check --storage r2 \
   --workers 1 --ramp-step-workers 1 --ramp-step-minutes 3 --max-workers 6
 ```
 
-**Expected Results:**
-- Duration: ~22 minutes
-- Cost: ~$1.23
-- Throughput: **~38-40 Gbps (same ceiling as c5n.9xlarge)**
-- Ramp curve: 1→2→3 workers/core
-- Peak at ~2-3 workers/core
-- **Will NOT reach 100 Gbps - R2 limit is ~40 Gbps**
+**Validated Results:**
+- Duration: ~15 minutes
+- Cost: ~$0.84
+- Throughput: **78.4 Gbps** (78% utilization) ✓
+- Ramp curve: 64→76→78→74 Gbps
+- Peak at 2 workers/core (384 HTTP requests)
+- **Surge pattern:** Jump from 65→78 Gbps, then plateau
 
 **Notes:**
-- **Expensive but necessary**: $3.36/hour to confirm R2 ceiling
-- Start with --workers 1 to capture full curve
-- Expected to hit same ~40 Gbps ceiling as c5n.9xlarge
-- Proves R2 per-client limit, not instance limit
+- **Best performing instance tested** ✓
+- Stable performance, clear surge and plateau pattern
+- R2 ceiling for this instance/network: ~78-80 Gbps
+- Performance degrades beyond 2 workers/core (queueing)
 
 ---
 
-## hpc7g.16xlarge - Extreme Throughput (200 Gbps)
+## c6in.32xlarge - Maximum Throughput Test (200 Gbps) 🚀
+
+**Specs:** 128 vCPUs, 200 Gbps, 256 GB RAM
+**Cost:** $6.72/hour
+**Use case:** Test if more cores can exceed 78 Gbps ceiling
+
+```bash
+python3 cli.py check --storage r2 \
+  --bandwidth 200.0 --processes 128 \
+  --workers 1 --ramp-step-workers 1 --ramp-step-minutes 3 --max-workers 5
+```
+
+**Expected Results:**
+- Duration: ~22-25 minutes
+- Cost: ~$2.80
+- Throughput: **78-100 Gbps** (testing if 2× cores helps)
+- Ramp curve: Will show if more parallelism breaks ceiling
+- Peak likely at 2-3 workers/core (256-384 HTTP per core, 512-768 total HTTP)
+
+**Why test this:**
+- c6in.16xlarge (64 cores): 78.4 Gbps ✓
+- c6in.32xlarge (128 cores): Can 2× cores push beyond 78 Gbps?
+- Same proven network family
+- Tests if R2 limit is per-connection or per-client
+
+**Possible outcomes:**
+1. **~78 Gbps:** R2 has hard per-client limit (confirms ceiling)
+2. **90-100 Gbps:** More cores help distribute load, partial breakthrough
+3. **>100 Gbps:** Major breakthrough, R2 scales with more connections
+
+---
+
+## c6in.32xlarge - Maximum Cores Test (200 Gbps) 🚀 CURRENT
+
+**Specs:** 128 vCPUs, 200 Gbps, 256 GB RAM
+**Cost:** $6.72/hour
+**Use case:** Test if 2× cores can exceed 78 Gbps ceiling
+
+```bash
+python3 cli.py check --storage r2 \
+  --bandwidth 200.0 --processes 128 \
+  --workers 1 --ramp-step-workers 1 --ramp-step-minutes 3 --max-workers 5
+```
+
+**Expected Results:**
+- Duration: ~22-25 minutes
+- Cost: ~$2.80
+- Throughput: **78-100 Gbps** (testing if more cores help)
+- Ramp curve: Will reveal if parallelism breaks ceiling
+- Peak likely at 1-2 workers/core (384-768 total HTTP requests)
+
+**Three Possible Outcomes:**
+1. **~78 Gbps:** Confirms R2 hard per-client limit (more cores don't help)
+2. **90-100 Gbps:** Partial breakthrough - more connections help somewhat
+3. **>100 Gbps:** Major discovery - high parallelism bypasses R2 limits
+
+**Notes:**
+- Double the cores of c6in.16xlarge (which achieved 78 Gbps)
+- Same proven network family
+- Tests hypothesis: Is R2 limit per-client or per-connection?
+- Lower max-workers (5 vs 6) since 128 cores = more total HTTP requests
+- With 128 cores: 1 worker/core = 384 HTTP, 2 workers/core = 768 HTTP
+
+---
+
+## hpc7g.16xlarge - High Throughput with EFA (200 Gbps) ✅ Tested
 
 **Specs:** 64 vCPUs, 200 Gbps with EFA, 128 GB RAM
 **Cost:** $2.38/hour
-**Use case:** Final confirmation of R2 ceiling
+**Use case:** Testing EFA with R2
 
 ```bash
 python3 cli.py check --storage r2 \
@@ -126,34 +191,37 @@ python3 cli.py check --storage r2 \
   --workers 1 --ramp-step-workers 1 --ramp-step-minutes 3 --max-workers 6
 ```
 
-**Expected Results:**
-- Duration: ~22 minutes
-- Cost: ~$0.87
-- Throughput: **~38-40 Gbps (same R2 ceiling)**
-- Ramp curve: 1→2→3 workers/core
-- Peak at ~2-3 workers/core
-- **Will NOT exceed 40 Gbps - R2 per-client limit**
+**Validated Results:**
+- Duration: ~11 minutes
+- Cost: ~$0.44
+- Throughput: **48.0 Gbps** (24% utilization) ⚠️
+- **HIGHLY UNSTABLE:** Variance 0.1-48 Gbps within phases
+- Peak at 2 workers/core (384 HTTP)
 
 **Notes:**
-- **Optional test** - c6in.16xlarge likely sufficient to confirm ceiling
-- Same ~40 Gbps limit expected (R2 throttling, not instance)
-- EFA provides ultra-low latency but won't bypass R2 limits
-- Purpose: Triple-confirm R2's per-client throughput ceiling
-- Consider skipping if budget-constrained
+- ⚠️ **EFA not suitable for internet traffic** (designed for intra-AWS)
+- Severe instability and poor performance
+- Worse than c5n.9xlarge despite 4× the bandwidth
+- **Not recommended** for R2 testing
 
 ---
 
 ## Quick Comparison Table
 
-| Instance | Bandwidth | vCPUs | Workers | Ramp | Duration | Cost | Expected Throughput |
-|----------|-----------|-------|---------|------|----------|------|---------------------|
-| **r5.xlarge** | 10 Gbps | 4 | 1→6 | +1 | 22 min | $0.09 | ~10 Gbps (95%) |
-| **r8gd.4xlarge** | 15 Gbps | 16 | 1→6 | +1 | 22 min | $0.43 | ~14 Gbps (95%) ✓ |
-| **c5n.9xlarge** | 50 Gbps | 36 | 1→6 | +1 | 22 min | $0.71 | **~38 Gbps (R2 limit)** ✓ |
-| **c6in.16xlarge** | 100 Gbps | 64 | 1→6 | +1 | 22 min | $1.23 | **~38 Gbps (R2 limit)** |
-| **hpc7g.16xlarge** | 200 Gbps | 64 | 1→6 | +1 | 22 min | $0.87 | **~38 Gbps (R2 limit)** |
+| Instance | Bandwidth | vCPUs | Workers | Ramp | Duration | Cost | Actual Throughput |
+|----------|-----------|-------|---------|------|----------|------|-------------------|
+| **r5.xlarge** | 10 Gbps | 4 | 1→6 | +1 | 22 min | $0.09 | 6.6 Gbps (66%) ✓ |
+| **r8gd.4xlarge** | 15 Gbps | 16 | 1→6 | +1 | 16 min | $0.43 | **14.3 Gbps (95%)** ✓ |
+| **c5n.9xlarge** | 50 Gbps | 36 | 1→6 | +1 | 22 min | $0.71 | 38.7 Gbps (77%) ✓ |
+| **c6in.16xlarge** | 100 Gbps | 64 | 1→6 | +1 | 15 min | $0.84 | **78.4 Gbps (78%)** ✓ |
+| **hpc7g.16xlarge** | 200 Gbps | 64 | 1→6 | +1 | 11 min | $0.44 | 48.0 Gbps (24%, unstable) ✓ |
+| **c6in.32xlarge** | 200 Gbps | 128 | 1→5 | +1 | 25 min | $2.80 | **Testing now...** 🚀 |
 
-**Key Finding:** R2 has a per-client throughput ceiling of ~38-40 Gbps regardless of instance bandwidth.
+**Key Findings:**
+- r8gd.4xlarge: Excellent 95% utilization (instance-limited)
+- c6in.16xlarge: Best absolute throughput at 78.4 Gbps (R2-limited)
+- R2 ceiling varies: ~38 Gbps (c5n), ~48 Gbps (hpc7g), ~78 Gbps (c6in)
+- c6in.32xlarge: Testing if 2× cores can exceed 78 Gbps
 
 ---
 
