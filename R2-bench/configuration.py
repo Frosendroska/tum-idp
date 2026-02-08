@@ -40,7 +40,7 @@ R2_SECRET_ACCESS_KEY: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
 
 # Object configuration
 OBJECT_SIZE_GB: int = 9
-RANGE_SIZE_MB: int = 100
+RANGE_SIZE_MB: int = 50  # Reduced from 100 to reduce queueing
 DEFAULT_OBJECT_KEY: str = "test-object-9gb"
 
 # =============================================================================
@@ -116,7 +116,7 @@ PER_SECOND_WINDOW_SIZE_SECONDS: float = 1.0  # Window size for per-second throug
 MAX_WORKERS_PER_CORE: int = 256  # Maximum async workers per core (safety limit for memory)
 
 # Pipeline configuration
-PIPELINE_DEPTH: int = 3  # Number of in-flight HTTP requests per worker
+PIPELINE_DEPTH: int = 6  # Number of in-flight HTTP requests per worker (increased for high-bandwidth instances)
 
 # Executor threads (for blocking disk I/O only)
 EXECUTOR_THREADS_PER_CORE: int = 2  # Minimal threads for disk writes
@@ -127,7 +127,7 @@ PERSISTENCE_FLUSH_INTERVAL_SECONDS: float = 15.0  # Flush to disk every 15s to f
 CONSOLIDATION_BATCH_SIZE: int = 50  # Number of parquet files to process per batch during consolidation (reduces memory usage)
 
 # Network configuration
-CONNECTION_POOL_SAFETY_FACTOR: float = 1.5  # Safety factor for boto3 connection pool sizing
+CONNECTION_POOL_SAFETY_FACTOR: float = 2.5  # Safety factor for boto3 connection pool sizing (increased for high concurrency)
 
 # SSL Configuration
 # Disabling SSL removes encryption overhead (~30-50% CPU), enabling 40-50 Gbps throughput
