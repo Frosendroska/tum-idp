@@ -62,7 +62,7 @@ STEADY_STATE_HOURS: int = 3
 # ALGORITHM PARAMETERS
 # =============================================================================
 
-PLATEAU_THRESHOLD: float = 0.05  # Minimum improvement threshold (5%)
+PLATEAU_THRESHOLD: float = 0.05  # Minimum improvement threshold between two consecutive steps (5%)
 PEAK_DEGRADATION_THRESHOLD: float = 0.10  # Maximum degradation from peak (10%)
 ERROR_RETRY_DELAY: int = 1  # Delay between retries in seconds
 PROGRESS_INTERVAL: int = 50  # Log progress every N requests
