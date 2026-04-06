@@ -13,6 +13,7 @@ import logging
 from visualizations.throughput_plots import ThroughputPlotter
 from visualizations.latency_plots import LatencyPlotter
 from visualizations.dashboard import DashboardPlotter
+from common.metrics_utils import ensure_retry_count_column
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class BenchmarkVisualizer:
         """Load benchmark data from Parquet file."""
         try:
             self.data = pd.read_parquet(self.parquet_file)
+            self.data = ensure_retry_count_column(self.data)
             logger.info(f"Loaded {len(self.data)} records from {self.parquet_file}")
         except Exception as e:
             logger.error(f"Failed to load data: {e}")

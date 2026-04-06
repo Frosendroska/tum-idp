@@ -14,7 +14,10 @@ from common.metrics_utils import (
     get_phase_boundaries,
     calculate_throughput_gbps,
     calculate_latency_stats,
-    bytes_to_gb
+    bytes_to_gb,
+    successful_request_mask,
+    compute_retry_error_statistics,
+    ensure_retry_count_column,
 )
 from configuration import THROUGHPUT_WINDOW_SIZE_SECONDS
 
@@ -31,16 +34,19 @@ class DashboardPlotter(BasePlotter):
             return None
         
         try:
+            data = ensure_retry_count_column(self.data)
+            retry_stats = compute_retry_error_statistics(data)
             # Calculate summary statistics
-            total_requests = len(self.data)
-            successful_requests = len(self.data[self.data['http_status'] == 200])
+            total_requests = len(data)
+            ok_mask = successful_request_mask(data)
+            successful_requests = int(ok_mask.sum())
             success_rate = successful_requests / total_requests if total_requests > 0 else 0
             
-            total_bytes = self.data[self.data['http_status'] == 200]['bytes'].sum()
-            
+            total_bytes = data.loc[ok_mask, "bytes"].sum()
+
             # Calculate time range using start_ts/end_ts
-            start_time = self.data['start_ts'].min()
-            end_time = self.data['end_ts'].max()
+            start_time = data["start_ts"].min()
+            end_time = data["end_ts"].max()
             duration = end_time - start_time
             
             # Calculate throughput in gigabits per second (Gbps)
@@ -77,7 +83,13 @@ Latency Statistics (ms):
   P95: {p95_latency:.1f}
   P99: {p99_latency:.1f}
 
-Concurrency Levels: {sorted(self.data['concurrency'].unique())}
+Concurrency Levels: {sorted(data['concurrency'].unique())}
+
+Retries / HTTP attempts
+  Sum of retry_count (failed attempts before outcome): {retry_stats['total_failed_http_attempts']:,}
+  Successful rows that needed >=1 retry: {retry_stats['successful_after_retry']:,}
+  Approx. total HTTP round-trips: {retry_stats['total_http_round_trips_approx']:,}
+  Max retry_count on any row: {retry_stats['max_retry_count']}
             """
             
             # Save summary to file
@@ -104,7 +116,10 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             if successful_data is None or len(successful_data) == 0:
                 logger.warning("No successful requests for performance dashboard")
                 return None
-            
+
+            data = ensure_retry_count_column(self.data)
+            retry_stats = compute_retry_error_statistics(data)
+
             # Create large dashboard
             fig = plt.figure(figsize=(20, 16))
             gs = fig.add_gridspec(4, 4, hspace=0.3, wspace=0.3)
@@ -261,7 +276,10 @@ Concurrency Levels: {sorted(self.data['concurrency'].unique())}
             P95 Latency: {p95_latency:.1f} ms
             P99 Latency: {p99_latency:.1f} ms
             Success Rate: {successful_requests/total_requests*100:.2f}%
-            Concurrency Levels: {sorted(self.data['concurrency'].unique())}
+            Concurrency Levels: {sorted(data['concurrency'].unique())}
+            Sum retry_count (failed HTTP attempts): {retry_stats['total_failed_http_attempts']:,}
+            Successful w/ >=1 retry: {retry_stats['successful_after_retry']:,}
+            Approx HTTP round-trips: {retry_stats['total_http_round_trips_approx']:,}
             """
             
             ax7.text(0.1, 0.5, metrics_text, fontsize=12, verticalalignment='center',

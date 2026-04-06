@@ -54,18 +54,16 @@ def test_prorating_single_phase():
 
 def test_prorating_across_two_phases():
     """Test prorating when request spans two phases (50% each)."""
-    # Phase 1: 100-200, Phase 2: 200-300
-    # Request: 150-250 (50% in phase 1, 50% in phase 2)
+    # Phase walls 100-200 and 200-300; one request 150-250 (1000 bytes)
     data = pd.DataFrame({
-        'phase_id': ['ramp_1', 'ramp_2'],  # Request started in ramp_1
-        'start_ts': [100.0, 150.0],  # Request starts at 150
-        'end_ts': [200.0, 250.0],  # Request ends at 250
-        'bytes': [1000, 1000],  # 1000 bytes total
-        'http_status': [200, 200]
+        'phase_id': ['ramp_1'],
+        'start_ts': [150.0],
+        'end_ts': [250.0],
+        'bytes': [1000],
+        'http_status': [200]
     })
-    
-    # Get boundaries
-    boundaries = get_phase_boundaries(data)
+
+    boundaries = {'ramp_1': (100.0, 200.0), 'ramp_2': (200.0, 300.0)}
     
     # Calculate for phase 1 (should get 50% of bytes)
     result1 = calculate_phase_throughput_with_prorating(
@@ -89,23 +87,26 @@ def test_prorating_across_two_phases():
 
 
 def test_prorating_across_three_phases():
-    """Test prorating when request spans three phases (30%, 30%, 40%)."""
-    # Phase 1: 100-200, Phase 2: 200-300, Phase 3: 300-400
-    # Request: 170-370 (30s in phase 1, 30s in phase 2, 40s in phase 3)
+    """Test prorating when request spans three phases (15%, 50%, 35%)."""
+    # Phase walls 100-200, 200-300, 300-400; one request 170-370 (1000 bytes)
     data = pd.DataFrame({
-        'phase_id': ['ramp_1', 'ramp_2', 'ramp_3'],
-        'start_ts': [100.0, 170.0, 300.0],  # Request starts at 170
-        'end_ts': [200.0, 370.0, 400.0],  # Request ends at 370
-        'bytes': [1000, 1000, 1000],  # 1000 bytes total
-        'http_status': [200, 200, 200]
+        'phase_id': ['ramp_2'],
+        'start_ts': [170.0],
+        'end_ts': [370.0],
+        'bytes': [1000],
+        'http_status': [200]
     })
-    
-    boundaries = get_phase_boundaries(data)
-    
+
+    boundaries = {
+        'ramp_1': (100.0, 200.0),
+        'ramp_2': (200.0, 300.0),
+        'ramp_3': (300.0, 400.0),
+    }
+
     # Request duration: 370 - 170 = 200 seconds
-    # Overlap with phase 1: 170-200 = 30 seconds (15%)
-    # Overlap with phase 2: 200-300 = 100 seconds (50%)
-    # Overlap with phase 3: 300-370 = 70 seconds (35%)
+    # Overlap with phase 1: 170-200 = 30 seconds -> 150 bytes
+    # Overlap with phase 2: 200-300 = 100 seconds -> 500 bytes
+    # Overlap with phase 3: 300-370 = 70 seconds -> 350 bytes
     
     result1 = calculate_phase_throughput_with_prorating(
         data, phase_id='ramp_1', phase_boundaries=boundaries
@@ -178,17 +179,16 @@ def test_multiple_requests_same_phase():
 
 def test_request_partially_overlapping_phase():
     """Test request that only partially overlaps with a phase."""
-    # Phase 1: 100-200
-    # Request: 150-250 (50% in phase 1, 50% outside)
+    # Phase 1 wall: 100-200; request 150-250 sticks out past phase 1
     data = pd.DataFrame({
-        'phase_id': ['ramp_1', 'ramp_2'],
-        'start_ts': [100.0, 150.0],
-        'end_ts': [200.0, 250.0],
-        'bytes': [1000, 1000],
-        'http_status': [200, 200]
+        'phase_id': ['ramp_1'],
+        'start_ts': [150.0],
+        'end_ts': [250.0],
+        'bytes': [1000],
+        'http_status': [200]
     })
-    
-    boundaries = get_phase_boundaries(data)
+
+    boundaries = {'ramp_1': (100.0, 200.0), 'ramp_2': (200.0, 300.0)}
     result = calculate_phase_throughput_with_prorating(
         data, phase_id='ramp_1', phase_boundaries=boundaries
     )

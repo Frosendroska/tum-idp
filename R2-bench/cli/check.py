@@ -25,6 +25,7 @@ from configuration import (
     PIPELINE_DEPTH,
     INITIAL_WORKERS_PER_CORE,
     MAX_WORKERS_PER_CORE,
+    STEADY_STATE_HOURS,
     CONNECTION_POOL_SAFETY_FACTOR,
     PERSISTENCE_FLUSH_INTERVAL_SECONDS,
     CONSOLIDATION_BATCH_SIZE,
@@ -32,6 +33,7 @@ from configuration import (
 from persistence.parquet import ParquetPersistence
 from algorithms.warm_up import WarmUp
 from algorithms.ramp import Ramp
+from algorithms.steady_state import SteadyState
 from common.process_pool import ProcessPool
 
 # Set up logging
@@ -58,11 +60,12 @@ class CapacityChecker:
         object_key: str,
         system_bandwidth_gbps: float = 50.0,
         num_processes: int = None,
-        workers_per_process: int = None,
-        ramp_step_workers: int = None,
+        initial_workers_per_core: int = None,
+        ramp_step_workers_per_core: int = None,
         ramp_step_minutes: int = None,
         pipeline_depth: int = None,
         max_workers_per_core: int = None,
+        steady_state_hours: int = None,
     ):
         import multiprocessing
 
@@ -74,11 +77,20 @@ class CapacityChecker:
         self.num_processes = num_processes or multiprocessing.cpu_count()
 
         # Use config values if not specified via CLI
-        self.initial_workers_per_core = workers_per_process or INITIAL_WORKERS_PER_CORE
-        self.ramp_step_workers_per_core = ramp_step_workers or RAMP_STEP_WORKERS_PER_CORE
+        self.initial_workers_per_core = (
+            initial_workers_per_core or INITIAL_WORKERS_PER_CORE
+        )
+        self.ramp_step_workers_per_core = (
+            ramp_step_workers_per_core or RAMP_STEP_WORKERS_PER_CORE
+        )
         self.ramp_step_minutes = ramp_step_minutes or RAMP_STEP_MINUTES
         self.pipeline_depth = pipeline_depth or PIPELINE_DEPTH
         self.max_workers_per_core = max_workers_per_core or MAX_WORKERS_PER_CORE
+        self.steady_state_hours = (
+            STEADY_STATE_HOURS
+            if steady_state_hours is None
+            else steady_state_hours
+        )
 
         # Process pool manager
         self.process_pool = None
@@ -94,7 +106,16 @@ class CapacityChecker:
         logger.info(f"Initial total workers: {total_workers}")
         logger.info(f"Initial concurrent HTTP requests: {total_http_requests}")
         logger.info(f"System bandwidth limit: {self.system_bandwidth_gbps} Gbps")
-        logger.info(f"Ramp configuration: +{self.ramp_step_workers_per_core} workers/core every {self.ramp_step_minutes} minutes")
+        logger.info(
+            f"Ramp configuration: +{self.ramp_step_workers_per_core} workers/core "
+            f"every {self.ramp_step_minutes} minutes"
+        )
+        if self.steady_state_hours > 0:
+            logger.info(
+                f"Steady-state after ramp: {self.steady_state_hours} hour(s)"
+            )
+        else:
+            logger.info("Steady-state after ramp: disabled (0 hours)")
 
     async def check_capacity(self):
         """Execute capacity discovery."""
@@ -108,8 +129,11 @@ class CapacityChecker:
                 'vcpus': self.num_processes,
                 'bandwidth_gbps': self.system_bandwidth_gbps,
                 'pipeline_depth': self.pipeline_depth,
+                'max_workers_per_core': self.max_workers_per_core,
                 'persistence_flush_interval_seconds': PERSISTENCE_FLUSH_INTERVAL_SECONDS,
-                'connection_pool_size': int(self.max_workers_per_core * CONNECTION_POOL_SAFETY_FACTOR),
+                'connection_pool_size': int(
+                    self.max_workers_per_core * self.pipeline_depth * CONNECTION_POOL_SAFETY_FACTOR
+                ),
                 'executor_threads_per_process': 2,  # Minimal threads for disk writes
             }
 
@@ -177,25 +201,48 @@ class CapacityChecker:
             ramp_results = await ramp.find_optimal_concurrency(max_workers_per_core=max_workers_per_core)
 
             # Report results
-            logger.info("=== Capacity Discovery Results ===")
+            logger.info("=== Ramp Results ===")
             logger.info(f"Best workers per core: {ramp_results['best_workers_per_core']}")
             logger.info(f"Best throughput: {ramp_results['best_throughput_gbps']:.2f} Gbps")
             logger.info(f"Steps completed: {len(ramp_results['step_results'])}")
             logger.info(f"Plateau detected: {ramp_results['plateau_detected']}")
             logger.info(f"Plateau reason: {ramp_results['plateau_reason']}")
+            if ramp_results.get("plateau_stop_kind"):
+                logger.info(f"Plateau stop kind: {ramp_results['plateau_stop_kind']}")
+            if ramp_results.get("reverted_to_peak_workers"):
+                logger.info("Reverted workers/core to peak-throughput level after degradation stop.")
 
-            # Log step results
-            for i, step in enumerate(ramp_results['step_results'], 1):
-                workers_per_core = step.get('workers_per_core', 0)
-                total_http_requests = step.get('total_http_requests', 0)
-                throughput = step.get('throughput_gbps', 0)
-                avg_latency = step.get('avg_latency_ms', 0)
-                total_requests = step.get('total_requests', 0)
-                duration = step.get('duration_seconds', 0)
+            for i, step in enumerate(ramp_results["step_results"], 1):
+                workers = step.get("workers_per_core", 0)
+                total_http = step.get("total_http_requests", 0)
+                throughput = step.get("throughput_gbps", 0)
+                avg_latency = step.get("avg_latency_ms", 0)
+                total_requests = step.get("total_requests", 0)
+                duration = step.get("duration_seconds", 0)
                 rps = total_requests / duration if duration > 0 else 0
                 logger.info(
-                    f"Step {i}: {workers_per_core} workers/core ({total_http_requests} HTTP requests) -> {throughput:.2f} Gbps "
-                    f"({total_requests} requests, {rps:.1f} req/s, {avg_latency:.0f}ms avg latency)"
+                    f"  Step {i}: {workers} workers/core ({total_http} concurrent HTTP) → "
+                    f"{throughput:.2f} Gbps, {total_requests} reqs, {rps:.1f} req/s, "
+                    f"{avg_latency:.0f} ms avg latency"
+                )
+
+            # Phase 3: Steady-state at best workers/core (records tail latency / drift)
+            if self.steady_state_hours > 0:
+                logger.info(
+                    f"=== Phase 3: Steady-state ({self.steady_state_hours} h, "
+                    f"{ramp_results['best_workers_per_core']} workers/core) ==="
+                )
+                steady = SteadyState(
+                    process_pool=self.process_pool,
+                    duration_hours=self.steady_state_hours,
+                    workers_per_core=ramp_results["best_workers_per_core"],
+                    object_key=self.object_key,
+                    system_bandwidth_gbps=self.system_bandwidth_gbps,
+                )
+                steady_stats = await steady.execute()
+                logger.info(
+                    f"Steady-state complete: {steady_stats['throughput_gbps']:.2f} Gbps, "
+                    f"{steady_stats['successful_requests']}/{steady_stats['total_requests']} requests"
                 )
 
         except Exception as e:
@@ -209,12 +256,12 @@ class CapacityChecker:
             # THEN consolidate ALL files (including final flush files from cleanup)
             logger.info("\n=== Saving Benchmark Data ===")
 
-            # Collect parquet files from all processes (now includes final flush files)
             parquet_files = []
-            for file_info in self.process_pool.parquet_files:
-                # Extract file path from dict or use directly if it's a string
+            if not self.process_pool:
+                logger.warning("No process pool; skipping consolidation.")
+            for file_info in (self.process_pool.parquet_files if self.process_pool else []):
                 if isinstance(file_info, dict):
-                    parquet_files.append(file_info['path'])
+                    parquet_files.append(file_info["path"])
                 else:
                     parquet_files.append(file_info)
 
@@ -377,7 +424,39 @@ def main():
     parser.add_argument(
         "--workers",
         type=int,
+        dest="initial_workers_per_core",
         help=f"Initial workers per core (default: {INITIAL_WORKERS_PER_CORE})",
+    )
+    parser.add_argument(
+        "--ramp-step-workers",
+        type=int,
+        dest="ramp_step_workers_per_core",
+        help=f"Workers to add per core each ramp step (default: {RAMP_STEP_WORKERS_PER_CORE})",
+    )
+    parser.add_argument(
+        "--ramp-step-minutes",
+        type=int,
+        help=f"Ramp step duration in minutes (default: {RAMP_STEP_MINUTES})",
+    )
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        dest="max_workers_per_core",
+        help=f"Maximum workers per core during ramp (default: {MAX_WORKERS_PER_CORE})",
+    )
+    parser.add_argument(
+        "--pipeline-depth",
+        type=int,
+        help=f"In-flight HTTP requests per worker (default: {PIPELINE_DEPTH})",
+    )
+    parser.add_argument(
+        "--steady-state-hours",
+        type=int,
+        default=None,
+        help=(
+            f"Run steady-state phase after ramp for this many hours "
+            f"(default: {STEADY_STATE_HOURS} from configuration; use 0 to skip)"
+        ),
     )
 
     args = parser.parse_args()
@@ -387,7 +466,12 @@ def main():
         object_key=args.object_key or "test-object-9gb",
         system_bandwidth_gbps=args.bandwidth,
         num_processes=args.processes,
-        workers_per_process=args.workers,  # Parameter name kept for backward compatibility
+        initial_workers_per_core=args.initial_workers_per_core,
+        ramp_step_workers_per_core=args.ramp_step_workers_per_core,
+        ramp_step_minutes=args.ramp_step_minutes,
+        pipeline_depth=args.pipeline_depth,
+        max_workers_per_core=args.max_workers_per_core,
+        steady_state_hours=args.steady_state_hours,
     )
 
     asyncio.run(checker.check_capacity())

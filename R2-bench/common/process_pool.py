@@ -108,8 +108,12 @@ async def _async_worker_process(
 
     try:
         # Initialize storage and worker pool
-        # Pass workers_per_core for accurate connection pool sizing
-        storage_system = create_storage_system(storage_type, verbose_init=False, workers_per_core=workers_per_core)
+        # Size connection pools for peak ramp concurrency (not just initial workers_per_core)
+        max_wpc = int(instance_config.get("max_workers_per_core", workers_per_core))
+        pool_sizing_workers = max(workers_per_core, max_wpc)
+        storage_system = create_storage_system(
+            storage_type, verbose_init=False, workers_per_core=pool_sizing_workers
+        )
         persistence = ParquetPersistence()
 
         cores = instance_config.get('vcpus', 1)
@@ -349,18 +353,22 @@ class ProcessPool:
             # Start workers (or adjust if already running)
             await self.start_workers(workers_per_core, self.current_object_key or "", phase_id)
 
-            # Wait for phase duration with progress logging
+            # Wait for phase duration with progress logging (once per completed 30s bucket)
             start_time = time.time()
-            check_interval = 5.0  # Check every 5s
+            check_interval = 5.0  # Wake interval
+            last_logged_30s_bucket = -1
 
             while (time.time() - start_time) < duration_seconds:
                 remaining = duration_seconds - (time.time() - start_time)
                 await asyncio.sleep(min(check_interval, remaining))
 
-                # Log progress every 30s
                 elapsed = time.time() - start_time
-                if int(elapsed) % 30 == 0 and elapsed > 0:
-                    logger.info(f"Phase '{phase_id}': {elapsed:.0f}s / {duration_seconds:.0f}s elapsed")
+                bucket = int(elapsed // 30)
+                if bucket > 0 and bucket > last_logged_30s_bucket:
+                    last_logged_30s_bucket = bucket
+                    logger.info(
+                        f"Phase '{phase_id}': ~{bucket * 30}s / {duration_seconds:.0f}s elapsed"
+                    )
 
             # Phase complete - force flush from all processes
             logger.info(f"Phase '{phase_id}' duration complete, forcing flush...")
@@ -573,7 +581,11 @@ class ProcessPool:
             return None
 
         # Load and analyze parquet files (only for this phase)
-        from common.metrics_utils import calculate_phase_throughput_with_prorating, calculate_latency_stats
+        from common.metrics_utils import (
+            calculate_phase_throughput_with_prorating,
+            calculate_latency_stats,
+            successful_request_mask,
+        )
 
         # Debug: show phase distribution
         phase_counts = {}
@@ -632,7 +644,7 @@ class ProcessPool:
         records_df = pd.concat(dfs, ignore_index=True)
 
         # Calculate stats
-        successful_df = records_df[records_df['http_status'] == 200]
+        successful_df = records_df[successful_request_mask(records_df)]
         total_requests = len(records_df)
         successful_requests = len(successful_df)
         error_rate = 1.0 - (successful_requests / total_requests) if total_requests > 0 else 1.0

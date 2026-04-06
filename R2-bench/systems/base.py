@@ -22,7 +22,12 @@ import os
 from typing import Tuple, Optional, Dict, Any, AsyncGenerator
 from urllib3.exceptions import IncompleteRead
 from botocore.exceptions import ReadTimeoutError
-from configuration import RANGE_SIZE_MB, REQUEST_TIMEOUT_SECONDS
+from configuration import (
+    RANGE_SIZE_MB,
+    REQUEST_TIMEOUT_SECONDS,
+    HTTP_STATUS_NO_RESPONSE,
+    HTTP_STATUS_LOCAL_TIMEOUT,
+)
 
 # Import aiohttp exceptions for payload error handling
 # aiohttp is a required dependency of aioboto3, so it's always available
@@ -264,20 +269,10 @@ class ObjectStorageSystem:
 
     async def download_range(
         self, key: str, start: int, length: int
-    ) -> Tuple[Optional[bytes], float, float]:
+    ) -> Tuple[Optional[bytes], float, float, int]:
         """Download a range of an object asynchronously with request-level timeouts.
-        
-        Returns (data, latency_ms, rtt_ms). Data is None on failure.
-        - latency_ms: Total time from request start to data fully received
-        - rtt_ms: Round Trip Time (Time To First Byte) - time from request start to response received
 
-        Args:
-            key: Object key
-            start: Start byte position
-            length: Length in bytes
-
-        Returns:
-            Tuple of (data bytes or None, latency_ms, rtt_ms)
+        Returns (data, latency_ms, rtt_ms, http_status). Data is None on failure (status 0).
         """
         if not self.client:
             raise RuntimeError("Storage client not initialized. Use async context manager.")
@@ -334,7 +329,10 @@ class ObjectStorageSystem:
                 self._metrics['total_bytes'] += len(data)
                 self._metrics['total_latency_ms'] += latency_ms
 
-            return data, latency_ms, rtt_ms
+            status_code = int(
+                response.get("ResponseMetadata", {}).get("HTTPStatusCode") or 200
+            )
+            return data, latency_ms, rtt_ms, status_code
 
         except asyncio.TimeoutError:
             async with self._metrics_lock:
@@ -347,25 +345,26 @@ class ObjectStorageSystem:
                 f"[TIMEOUT #{timeout_count}] Request timeout for {key} range {start}-{start+length-1} "
                 f"after {REQUEST_TIMEOUT_SECONDS}s (likely R2 overload)"
             )
-            return None, 0, 0
-        
+            return None, 0, 0, HTTP_STATUS_LOCAL_TIMEOUT
+
         except IncompleteRead as e:
             logger.debug(f"IncompleteRead for {key} range {start}-{start + length - 1}: {e}")
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
-            return None, 0, 0
-        
+            return None, 0, 0, HTTP_STATUS_NO_RESPONSE
+
         except ReadTimeoutError as e:
             logger.debug(f"Read timeout for {key} range {start}-{start + length - 1}: {e}")
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
-            return None, 0, 0
-        
+            return None, 0, 0, HTTP_STATUS_LOCAL_TIMEOUT
+
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-            status_code = e.response.get('ResponseMetadata', {}).get('HTTPStatusCode', 0)
+            raw_status = e.response.get('ResponseMetadata', {}).get('HTTPStatusCode')
+            status_code = int(raw_status) if raw_status is not None else HTTP_STATUS_NO_RESPONSE
 
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
@@ -385,8 +384,8 @@ class ObjectStorageSystem:
                         f"S3 error {error_code} (HTTP {status_code}) for {key} "
                         f"range {start}-{start+length-1}"
                     )
-            return None, 0, 0
-        
+            return None, 0, 0, status_code
+
         except Exception as e:
             # Check if this is a ClientPayloadError (incomplete payload from aiohttp)
             # This happens when connection closes before all data is received
@@ -422,7 +421,7 @@ class ObjectStorageSystem:
             async with self._metrics_lock:
                 self._metrics['total_downloads'] += 1
                 self._metrics['failed_downloads'] += 1
-            return None, 0, 0
+            return None, 0, 0, HTTP_STATUS_NO_RESPONSE
 
         finally:
             # Always close the body stream to prevent connection leaks

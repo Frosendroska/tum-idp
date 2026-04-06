@@ -8,10 +8,17 @@ Detects three types of ceilings:
 """
 
 import logging
-from typing import Tuple
+from typing import Optional, Tuple
+
 from configuration import PLATEAU_THRESHOLD, PEAK_DEGRADATION_THRESHOLD
 
 logger = logging.getLogger(__name__)
+
+# What triggered a plateau stop (third return value of is_plateau_reached)
+PLATEAU_STOP_NONE: Optional[str] = None
+PLATEAU_STOP_NIC = "nic_ceiling"
+PLATEAU_STOP_DEGRADATION = "degradation_from_peak"
+PLATEAU_STOP_DIMINISHING = "diminishing_returns"
 
 
 class PlateauCheck:
@@ -42,125 +49,167 @@ class PlateauCheck:
             f"degradation_threshold={PEAK_DEGRADATION_THRESHOLD*100:.0f}%, "
             f"system_limit={system_bandwidth_gbps} Gbps"
         )
-    
-    def add_measurement(self, concurrency: int, throughput_gbps: float, duration_seconds: float):
-        """Add a measurement."""
-        self.measurements.append({
-            'concurrency': concurrency,
-            'throughput_gbps': throughput_gbps,
-            'duration_seconds': duration_seconds
-        })
-        logger.debug(f"Added measurement: {concurrency} conn -> {throughput_gbps:.2f} Gbps")
-    
-    def is_plateau_reached(self) -> Tuple[bool, str]:
+
+    def add_measurement(
+        self, workers_per_core: int, throughput_gbps: float, duration_seconds: float
+    ):
+        """Append one ramp step (workers per core, measured throughput, phase duration)."""
+        self.measurements.append(
+            {
+                "workers_per_core": workers_per_core,
+                "throughput_gbps": throughput_gbps,
+                "duration_seconds": duration_seconds,
+            }
+        )
+        logger.debug(
+            f"Added measurement: {workers_per_core} workers/core -> {throughput_gbps:.2f} Gbps"
+        )
+
+    def is_plateau_reached(self) -> Tuple[bool, str, Optional[str]]:
         """Determine if throughput has reached its ceiling.
 
         Returns:
-            Tuple of (plateau_reached: bool, reason: str)
+            Tuple of (plateau_reached, reason, stop_kind).
+            stop_kind is PLATEAU_STOP_NIC, PLATEAU_STOP_DEGRADATION, PLATEAU_STOP_DIMINISHING,
+            or PLATEAU_STOP_NONE when not plateaued.
         """
         if len(self.measurements) < 1:
-            return False, "Not enough measurements"
+            return False, "Not enough measurements", PLATEAU_STOP_NONE
 
         latest_measurement = self.measurements[-1]
-        latest_throughput = latest_measurement['throughput_gbps']
+        latest_throughput = latest_measurement["throughput_gbps"]
 
         # === CHECK 1: System Bandwidth Limit (Instance Ceiling) ===
         if self.system_bandwidth_gbps > 0:
-            # Consider "reached" if within 95% of limit (to account for overhead)
             effective_limit = self.system_bandwidth_gbps * self.system_limit_margin
             utilization = (latest_throughput / self.system_bandwidth_gbps) * 100
 
             if latest_throughput >= effective_limit:
-                return True, (
-                    f"System bandwidth ceiling reached: {latest_throughput:.2f} Gbps "
-                    f"({utilization:.1f}% of {self.system_bandwidth_gbps} Gbps limit)"
+                return (
+                    True,
+                    (
+                        f"System bandwidth ceiling reached: {latest_throughput:.2f} Gbps "
+                        f"({utilization:.1f}% of {self.system_bandwidth_gbps} Gbps limit)"
+                    ),
+                    PLATEAU_STOP_NIC,
                 )
 
-        # === CHECK 2: Performance Degradation (R2 Throttling or Overload) ===
-        # Find peak throughput across all measurements
-        peak_throughput = max(m['throughput_gbps'] for m in self.measurements)
+        # === CHECK 2: Performance Degradation (global peak) ===
+        peak_throughput = max(m["throughput_gbps"] for m in self.measurements)
 
         if peak_throughput > 0 and latest_throughput < peak_throughput:
             degradation = (peak_throughput - latest_throughput) / peak_throughput
 
-            # Stop if throughput degraded by more than threshold
             if degradation > PEAK_DEGRADATION_THRESHOLD:
-                return True, (
-                    f"Performance degradation detected: {degradation:.1%} drop from peak "
-                    f"(peak: {peak_throughput:.2f} Gbps → current: {latest_throughput:.2f} Gbps). "
-                    f"Likely R2 throttling or system overload."
+                return (
+                    True,
+                    (
+                        f"Performance degradation detected: {degradation:.1%} drop from peak "
+                        f"(peak: {peak_throughput:.2f} Gbps → current: {latest_throughput:.2f} Gbps). "
+                        f"Likely R2 throttling or system overload."
+                    ),
+                    PLATEAU_STOP_DEGRADATION,
                 )
 
         # === CHECK 3: Throughput Plateau (Diminishing Returns) ===
-        # Need at least 2 measurements to calculate improvement
         if len(self.measurements) < 2:
-            return False, "Insufficient measurements for plateau detection (need ≥2)"
+            return (
+                False,
+                "Insufficient measurements for plateau detection (need ≥2)",
+                PLATEAU_STOP_NONE,
+            )
 
-        # Look at last 2 measurements to check recent improvement
         prev_measurement = self.measurements[-2]
-        prev_throughput = prev_measurement['throughput_gbps']
+        prev_throughput = prev_measurement["throughput_gbps"]
 
-        if prev_throughput > 0:
-            improvement = (latest_throughput - prev_throughput) / prev_throughput
+        if prev_throughput <= 0:
+            return False, "Need more measurements for plateau detection", PLATEAU_STOP_NONE
 
-            # For more confidence, also check if we've had multiple low-improvement steps
-            if len(self.measurements) >= 3:
-                # Check last 2 consecutive improvements
-                third_last = self.measurements[-3]
-                third_throughput = third_last['throughput_gbps']
+        improvement = (latest_throughput - prev_throughput) / prev_throughput
 
-                if third_throughput > 0:
-                    prev_improvement = (prev_throughput - third_throughput) / third_throughput
+        # Exactly two steps: no diminishing-returns rule yet; avoid misleading "still improving"
+        if len(self.measurements) == 2:
+            if improvement > self.threshold:
+                return (
+                    False,
+                    (
+                        f"Throughput up {improvement:.1%} vs previous step "
+                        f"(only two ramp steps; need ≥3 to apply diminishing-returns plateau rule)"
+                    ),
+                    PLATEAU_STOP_NONE,
+                )
+            if improvement < 0:
+                return (
+                    False,
+                    (
+                        f"Throughput down {abs(improvement):.1%} vs previous step "
+                        f"(only two ramp steps; global peak rule applies if drop exceeds threshold)"
+                    ),
+                    PLATEAU_STOP_NONE,
+                )
+            return (
+                False,
+                (
+                    f"Throughput change {improvement:+.1%} vs previous step "
+                    f"(only two ramp steps; need ≥3 for diminishing-returns plateau)"
+                ),
+                PLATEAU_STOP_NONE,
+            )
 
-                    # Both recent steps show minimal improvement or degradation
-                    # Don't use abs() - negative improvement (degradation) should also trigger plateau
-                    if improvement < self.threshold and prev_improvement < self.threshold:
-                        return True, (
-                            f"Throughput plateau detected: last 2 steps improved by "
-                            f"{improvement:.1%} and {prev_improvement:.1%} "
-                            f"(both below {self.threshold*100:.0f}% threshold). "
-                            f"Current: {latest_throughput:.2f} Gbps"
-                        )
+        # Three or more measurements: last two relative improvements both below threshold
+        third_last = self.measurements[-3]
+        third_throughput = third_last["throughput_gbps"]
 
-            # Still improving significantly (improvement already calculated above)
-            return False, f"Throughput still improving: +{improvement:.1%} in last step"
+        if third_throughput > 0:
+            prev_improvement = (prev_throughput - third_throughput) / third_throughput
 
-        # Insufficient measurements for trend detection
-        return False, "Need more measurements for plateau detection"
-    
+            if improvement < self.threshold and prev_improvement < self.threshold:
+                return (
+                    True,
+                    (
+                        f"Throughput plateau detected: last 2 steps improved by "
+                        f"{improvement:.1%} and {prev_improvement:.1%} "
+                        f"(both below {self.threshold*100:.0f}% threshold). "
+                        f"Current: {latest_throughput:.2f} Gbps"
+                    ),
+                    PLATEAU_STOP_DIMINISHING,
+                )
+
+        return (
+            False,
+            f"Throughput still improving: +{improvement:.1%} in last step",
+            PLATEAU_STOP_NONE,
+        )
+
     def get_plateau_summary(self) -> dict:
-        """Get comprehensive summary of plateau detection results.
-
-        Returns:
-            Dictionary with detection statistics and final state
-        """
+        """Get comprehensive summary of plateau detection results."""
         if not self.measurements:
             return {
-                'status': 'no_measurements',
-                'measurements_count': 0,
-                'plateau_reached': False,
-                'reason': 'No measurements recorded'
+                "status": "no_measurements",
+                "measurements_count": 0,
+                "plateau_reached": False,
+                "reason": "No measurements recorded",
+                "plateau_stop_kind": PLATEAU_STOP_NONE,
             }
 
-        plateau_reached, reason = self.is_plateau_reached()
+        plateau_reached, reason, stop_kind = self.is_plateau_reached()
 
-        # Calculate peak and final throughput
-        peak_throughput = max(m['throughput_gbps'] for m in self.measurements)
-        final_throughput = self.measurements[-1]['throughput_gbps']
+        peak_throughput = max(m["throughput_gbps"] for m in self.measurements)
+        final_throughput = self.measurements[-1]["throughput_gbps"]
 
-        # Calculate peak utilization if system limit known
         peak_utilization_pct = None
         if self.system_bandwidth_gbps > 0:
             peak_utilization_pct = (peak_throughput / self.system_bandwidth_gbps) * 100
 
         return {
-            'status': 'complete',
-            'measurements_count': len(self.measurements),
-            'plateau_reached': plateau_reached,
-            'reason': reason,
-            'peak_throughput_gbps': peak_throughput,
-            'final_throughput_gbps': final_throughput,
-            'peak_utilization_pct': peak_utilization_pct,
-            'system_limit_gbps': self.system_bandwidth_gbps,
-            'last_measurement': self.measurements[-1]
+            "status": "complete",
+            "measurements_count": len(self.measurements),
+            "plateau_reached": plateau_reached,
+            "reason": reason,
+            "plateau_stop_kind": stop_kind,
+            "peak_throughput_gbps": peak_throughput,
+            "final_throughput_gbps": final_throughput,
+            "peak_utilization_pct": peak_utilization_pct,
+            "system_limit_gbps": self.system_bandwidth_gbps,
+            "last_measurement": self.measurements[-1],
         }

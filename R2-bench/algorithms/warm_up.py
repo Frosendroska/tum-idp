@@ -31,9 +31,7 @@ class WarmUp:
         duration_seconds = self.warm_up_minutes * 60
         phase_id = "warmup"
 
-        logger.info(f"Starting warm-up: {self.workers_per_core} workers/core for {duration_seconds}s")
-
-        # Execute phase across all processes
+        # execute_phase logs phase name, workers, and duration
         stats = await self.process_pool.execute_phase(
             workers_per_core=self.workers_per_core,
             phase_id=phase_id,
