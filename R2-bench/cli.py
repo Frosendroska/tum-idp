@@ -19,6 +19,7 @@ from configuration import (
     OBJECT_SIZE_GB,
     DEFAULT_OBJECT_KEY,
     DEFAULT_PLOTS_DIR,
+    STEADY_STATE_HOURS,
 )
 
 # Set up logging
@@ -85,6 +86,15 @@ Examples:
                                 help='HTTP requests per worker (default: from config)')
         check_parser.add_argument('--max-workers', type=int,
                                 help='Maximum workers per core (default: from config)')
+        check_parser.add_argument(
+            '--steady-state-hours',
+            type=int,
+            default=None,
+            help=(
+                f'Steady-state duration after ramp in hours '
+                f'(default: {STEADY_STATE_HOURS} from config; use 0 to skip)'
+            ),
+        )
 
         # Visualize command
         visualize_parser = subparsers.add_parser('visualize', help='Generate plots from benchmark results')
@@ -128,11 +138,32 @@ Examples:
                 object_key=args.object_key,
                 system_bandwidth_gbps=args.bandwidth,
                 num_processes=args.processes if hasattr(args, 'processes') and args.processes else None,
-                workers_per_process=args.workers if hasattr(args, 'workers') and args.workers else None,
-                ramp_step_workers=args.ramp_step_workers if hasattr(args, 'ramp_step_workers') and args.ramp_step_workers else None,
-                ramp_step_minutes=args.ramp_step_minutes if hasattr(args, 'ramp_step_minutes') and args.ramp_step_minutes else None,
-                pipeline_depth=args.pipeline_depth if hasattr(args, 'pipeline_depth') and args.pipeline_depth else None,
-                max_workers_per_core=args.max_workers if hasattr(args, 'max_workers') and args.max_workers else None,
+                initial_workers_per_core=args.workers if hasattr(args, 'workers') and args.workers else None,
+                ramp_step_workers_per_core=(
+                    args.ramp_step_workers
+                    if hasattr(args, 'ramp_step_workers') and args.ramp_step_workers
+                    else None
+                ),
+                ramp_step_minutes=(
+                    args.ramp_step_minutes
+                    if hasattr(args, 'ramp_step_minutes') and args.ramp_step_minutes
+                    else None
+                ),
+                pipeline_depth=(
+                    args.pipeline_depth
+                    if hasattr(args, 'pipeline_depth') and args.pipeline_depth
+                    else None
+                ),
+                max_workers_per_core=(
+                    args.max_workers
+                    if hasattr(args, 'max_workers') and args.max_workers
+                    else None
+                ),
+                steady_state_hours=(
+                    args.steady_state_hours
+                    if hasattr(args, 'steady_state_hours') and args.steady_state_hours is not None
+                    else None
+                ),
             )
 
             await checker.check_capacity()

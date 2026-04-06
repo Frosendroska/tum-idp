@@ -5,6 +5,8 @@ Base classes for plot visualization.
 import pandas as pd
 import logging
 
+from common.metrics_utils import successful_request_mask
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,7 +22,7 @@ class BasePlotter:
         """Filter data to only include successful requests."""
         if self.data is None or len(self.data) == 0:
             return None
-        return self.data[self.data['http_status'] == 200]
+        return self.data[successful_request_mask(self.data)]
     
     def get_unique_phases(self):
         """Get unique phase IDs from data."""

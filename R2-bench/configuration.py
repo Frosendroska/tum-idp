@@ -40,7 +40,9 @@ R2_SECRET_ACCESS_KEY: str = os.getenv("R2_SECRET_ACCESS_KEY", "")
 
 # Object configuration
 OBJECT_SIZE_GB: int = 9
-RANGE_SIZE_MB: int = 50  # Reduced from 100 to reduce queueing
+# Default matches primary study setup (report Ch. 7): 100 MB chunks, pipeline 3.
+# Use 50 MB + pipeline 6 for the low-queueing variant (see EXPERIMENT_SETUP.md).
+RANGE_SIZE_MB: int = int(os.getenv("RANGE_SIZE_MB", "100"))
 DEFAULT_OBJECT_KEY: str = "test-object-9gb"
 
 # =============================================================================
@@ -49,14 +51,14 @@ DEFAULT_OBJECT_KEY: str = "test-object-9gb"
 
 # Warm-up phase
 WARM_UP_MINUTES: int = 1
-INITIAL_WORKERS_PER_CORE: int = 8  # Start with 8 workers per core
+INITIAL_WORKERS_PER_CORE: int = 1  # Documented runs use 1 worker/core at start (see EXPERIMENT_SETUP.md)
 
-# Ramp-up phase
-RAMP_STEP_MINUTES: int = 5
-RAMP_STEP_WORKERS_PER_CORE: int = 4  # Add 4 workers per core each step (reduced from 8 for gradual scaling)
+# Ramp-up phase (matches documented EC2 commands: +1 worker/core every 3 minutes)
+RAMP_STEP_MINUTES: int = 3
+RAMP_STEP_WORKERS_PER_CORE: int = 1
 
-# Steady state phase
-STEADY_STATE_HOURS: int = 3
+# Steady state phase (0 = skip; use 3 for full thesis-style runs or pass --steady-state-hours)
+STEADY_STATE_HOURS: int = 0
 
 # =============================================================================
 # ALGORITHM PARAMETERS
@@ -88,7 +90,12 @@ REQUEST_TIMEOUT_SECONDS: int = 60  # 60 seconds for 100MB chunks (balanced for R
 # =============================================================================
 
 HTTP_SUCCESS_STATUS: int = 200
+HTTP_PARTIAL_CONTENT_STATUS: int = 206  # Range GET success (S3/R2)
 HTTP_ERROR_STATUS: int = 500
+# Recorded when no HTTP status is available (transport errors, incomplete read, etc.)
+HTTP_STATUS_NO_RESPONSE: int = 0
+# Recorded for local asyncio/read timeouts (distinct from server 408 if ever returned)
+HTTP_STATUS_LOCAL_TIMEOUT: int = 408
 
 # =============================================================================
 # FILE SIZE CONSTANTS
@@ -116,7 +123,7 @@ PER_SECOND_WINDOW_SIZE_SECONDS: float = 1.0  # Window size for per-second throug
 MAX_WORKERS_PER_CORE: int = 256  # Maximum async workers per core (safety limit for memory)
 
 # Pipeline configuration
-PIPELINE_DEPTH: int = 6  # Number of in-flight HTTP requests per worker (increased for high-bandwidth instances)
+PIPELINE_DEPTH: int = int(os.getenv("PIPELINE_DEPTH", "3"))  # Default 3; set 6 with 50 MB chunks for latency experiments
 
 # Executor threads (for blocking disk I/O only)
 EXECUTOR_THREADS_PER_CORE: int = 2  # Minimal threads for disk writes

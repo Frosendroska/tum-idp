@@ -9,6 +9,12 @@ import logging
 import os
 
 from .base import BasePlotter
+from common.metrics_utils import (
+    successful_request_mask,
+    http_status_display_label,
+    compute_retry_error_statistics,
+    ensure_retry_count_column,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -430,39 +436,88 @@ Mean Latency: {successful_data['latency_ms'].mean():.1f} ms"""
             return None
     
     def create_error_analysis(self):
-        """Create error analysis plot."""
+        """HTTP status (all rows) + retry histogram; writes error_retry_report.txt."""
         if self.data is None or len(self.data) == 0:
             logger.warning("No data available for error analysis")
             return None
-        
+
         try:
-            plt.figure(figsize=(10, 6))
-            
-            # Count HTTP status codes
-            status_counts = self.data['http_status'].value_counts()
-            
-            # Create bar plot
-            plt.bar(status_counts.index.astype(str), status_counts.values, alpha=0.7)
-            plt.title('HTTP Status Code Distribution')
-            plt.xlabel('HTTP Status Code')
-            plt.ylabel('Count')
-            plt.grid(True, alpha=0.3)
-            
-            # Add value labels on bars
+            df = ensure_retry_count_column(self.data.copy())
+            stats = compute_retry_error_statistics(df)
+            df["_status_label"] = df["http_status"].apply(http_status_display_label)
+            status_counts = df["_status_label"].value_counts().sort_index()
+
+            fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+            fig.suptitle("Errors, HTTP status, and retries", fontsize=14, fontweight="bold")
+
+            ax1 = axes[0]
+            x = np.arange(len(status_counts))
+            ax1.bar(x, status_counts.values, alpha=0.85, color="steelblue", edgecolor="black", linewidth=0.5)
+            ax1.set_xticks(x)
+            ax1.set_xticklabels(list(status_counts.index), rotation=40, ha="right", fontsize=9)
+            ax1.set_title("Records per HTTP status (or synthetic code)")
+            ax1.set_ylabel("Count")
+            ax1.grid(True, axis="y", alpha=0.3)
+            ymax = max(int(status_counts.values.max()), 1)
             for i, v in enumerate(status_counts.values):
-                plt.text(i, v + max(status_counts.values) * 0.01, str(v), 
-                        ha='center', va='bottom')
-            
+                ax1.text(i, v + ymax * 0.01, str(int(v)), ha="center", va="bottom", fontsize=8)
+
+            ax2 = axes[1]
+            ok = successful_request_mask(df)
+            rc_ok = df.loc[ok, "retry_count"].fillna(0).astype(int)
+            if len(rc_ok) > 0:
+                max_r = int(rc_ok.max())
+                bins = np.arange(-0.5, max_r + 1.5, 1.0)
+                ax2.hist(
+                    rc_ok,
+                    bins=bins,
+                    rwidth=0.85,
+                    color="darkseagreen",
+                    edgecolor="black",
+                    linewidth=0.5,
+                )
+                ax2.set_xticks(range(0, max_r + 1))
+            ax2.set_title("Successful requests: failures before OK\n(retry_count per record)")
+            ax2.set_xlabel("retry_count (failed attempts before success)")
+            ax2.set_ylabel("Count")
+            ax2.grid(True, axis="y", alpha=0.3)
+
             plt.tight_layout()
-            
-            # Save plot
-            output_file = os.path.join(self.output_dir, 'error_analysis.png')
-            plt.savefig(output_file, dpi=300, bbox_inches='tight')
+            output_file = os.path.join(self.output_dir, "error_analysis.png")
+            plt.savefig(output_file, dpi=300, bbox_inches="tight")
             plt.close()
-            
+
+            report_file = os.path.join(self.output_dir, "error_retry_report.txt")
+            with open(report_file, "w") as f:
+                f.write("HTTP status distribution (one row per logical request)\n")
+                f.write("=" * 60 + "\n")
+                for label, cnt in status_counts.items():
+                    f.write(f"  {label}: {int(cnt):,}\n")
+                f.write("\nRetry / HTTP attempt summary\n")
+                f.write("=" * 60 + "\n")
+                f.write(
+                    f"  Total logical requests: {stats['total_records']:,}\n"
+                    f"  Successful (HTTP 200/206): {stats['successful_logical_requests']:,}\n"
+                    f"  Failed (after retries exhausted): {stats['failed_logical_requests']:,}\n"
+                    f"  Success rate: {stats['success_rate']:.4%}\n"
+                    f"  Successful that needed >=1 retry: {stats['successful_after_retry']:,}\n"
+                    f"  Sum of retry_count (failed HTTP attempts across all rows): "
+                    f"{stats['total_failed_http_attempts']:,}\n"
+                    f"  Approx. total HTTP round-trips: {stats['total_http_round_trips_approx']:,}\n"
+                    f"    (successful responses + prior failed attempts)\n"
+                    f"  Max retry_count on any row: {stats['max_retry_count']}\n"
+                )
+                f.write("\nNotes:\n")
+                f.write(
+                    "  - Synthetic codes: 0 = non-HTTP/transport; 408 = local asyncio/read timeout.\n"
+                    "  - Server errors (429, 503, …) use the HTTP status from the API when available.\n"
+                    "  - On final failure, retry_count equals MAX_RETRIES (each attempt failed).\n"
+                )
+
             logger.info(f"Created error analysis plot: {output_file}")
+            logger.info(f"Wrote error/retry report: {report_file}")
             return output_file
-            
+
         except Exception as e:
             logger.error(f"Failed to create error analysis plot: {e}")
             return None

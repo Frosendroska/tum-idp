@@ -9,9 +9,80 @@ from configuration import (
     GIGABITS_PER_GB,
     BYTES_PER_GB,
     PER_SECOND_WINDOW_SIZE_SECONDS,
+    HTTP_SUCCESS_STATUS,
+    HTTP_PARTIAL_CONTENT_STATUS,
+    HTTP_STATUS_NO_RESPONSE,
+    HTTP_STATUS_LOCAL_TIMEOUT,
 )
 
 logger = logging.getLogger(__name__)
+
+_SUCCESS_STATUSES = (HTTP_SUCCESS_STATUS, HTTP_PARTIAL_CONTENT_STATUS)
+
+
+def successful_request_mask(data: pd.DataFrame) -> pd.Series:
+    """Rows to include in throughput/latency metrics (OK and partial-content range responses)."""
+    if data is None or len(data) == 0:
+        return pd.Series(dtype=bool)
+    if "http_status" not in data.columns:
+        return pd.Series(True, index=data.index)
+    return data["http_status"].isin(_SUCCESS_STATUSES)
+
+
+def http_status_display_label(status: int) -> str:
+    """Human-readable label for plots and reports (synthetic codes documented)."""
+    try:
+        s = int(status)
+    except (TypeError, ValueError):
+        return str(status)
+    if s == HTTP_STATUS_NO_RESPONSE:
+        return "0 (non-HTTP / transport)"
+    if s == HTTP_STATUS_LOCAL_TIMEOUT:
+        return "408 (client read/deadline timeout)"
+    return str(s)
+
+
+def ensure_retry_count_column(data: pd.DataFrame) -> pd.DataFrame:
+    """Older Parquet files may omit retry_count; default to 0."""
+    if data is None or len(data) == 0:
+        return data
+    if "retry_count" not in data.columns:
+        out = data.copy()
+        out["retry_count"] = 0
+        return out
+    return data
+
+
+def compute_retry_error_statistics(data: pd.DataFrame) -> dict:
+    """Aggregate retry counts and success/failure split for reporting."""
+    empty = {
+        "total_records": 0,
+        "successful_logical_requests": 0,
+        "failed_logical_requests": 0,
+        "success_rate": 0.0,
+        "total_failed_http_attempts": 0,
+        "successful_after_retry": 0,
+        "max_retry_count": 0,
+        "total_http_round_trips_approx": 0,
+    }
+    if data is None or len(data) == 0:
+        return empty
+    df = ensure_retry_count_column(data)
+    ok = successful_request_mask(df)
+    rc = df["retry_count"].fillna(0).astype(int)
+    n_ok = int(ok.sum())
+    n_fail = int(len(df) - n_ok)
+    total_failed_attempts = int(rc.sum())
+    return {
+        "total_records": len(df),
+        "successful_logical_requests": n_ok,
+        "failed_logical_requests": n_fail,
+        "success_rate": n_ok / len(df) if len(df) else 0.0,
+        "total_failed_http_attempts": total_failed_attempts,
+        "successful_after_retry": int((ok & (rc > 0)).sum()),
+        "max_retry_count": int(rc.max()) if len(rc) else 0,
+        "total_http_round_trips_approx": n_ok + total_failed_attempts,
+    }
 
 
 def calculate_throughput_gbps(total_bytes: float, duration_seconds: float) -> float:
@@ -41,14 +112,13 @@ def calculate_latency_stats(data: pd.DataFrame, latency_col: str = 'latency_ms')
     worker_pool and visualizations.
     
     Args:
-        data: DataFrame with latency data (must have http_status column)
+        data: DataFrame with latency data; optional http_status (if absent, all rows used)
         latency_col: Column name for latency values (default: 'latency_ms')
     
     Returns:
         Dictionary with avg, p50, p95, p99 latency statistics
     """
-    # Filter to successful requests
-    successful_data = data[data.get('http_status', 200) == 200]
+    successful_data = data[successful_request_mask(data)]
     
     if len(successful_data) == 0 or latency_col not in successful_data.columns:
         return {
@@ -150,8 +220,7 @@ def calculate_phase_throughput_with_prorating(
     Returns:
         Dictionary with phase statistics including prorated throughput
     """
-    # Filter to successful requests
-    successful_data = data[data.get('http_status', 200) == 200].copy()
+    successful_data = data[successful_request_mask(data)].copy()
     
     if len(successful_data) == 0:
         return {
@@ -262,7 +331,7 @@ def prorate_bytes_to_time_windows(
         return pd.DataFrame(columns=['window_start', 'throughput_gbps', 'total_bytes', 'request_count', 'phase_id'])
     
     # Filter to successful requests only
-    successful_data = data[data.get('http_status', 200) == 200].copy()
+    successful_data = data[successful_request_mask(data)].copy()
     
     if len(successful_data) == 0:
         return pd.DataFrame(columns=['window_start', 'throughput_gbps', 'total_bytes', 'request_count', 'phase_id'])

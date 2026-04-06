@@ -21,6 +21,7 @@ from configuration import (
     OBJECT_SIZE_GB,
     ERROR_BACKOFF_ENABLED,
     ERROR_BACKOFF_MAX_SECONDS,
+    HTTP_STATUS_NO_RESPONSE,
 )
 
 logger = logging.getLogger(__name__)
@@ -204,40 +205,36 @@ class WorkerPool:
     async def _download_request(self, worker_id: int) -> bool:
         """Execute single download with retry.
 
+        Persists one BenchmarkRecord per logical request (success or final failure).
+        retry_count: failed attempts before success, or MAX_RETRIES if all attempts failed.
+
         Returns:
             True if successful, False otherwise
         """
-        # Note: Don't capture phase_id/object_key here - they may change during long requests
-        # Get random range
         range_start = self._get_next_range_start()
         range_length = RANGE_SIZE_MB * BYTES_PER_MB
+        first_start: Optional[float] = None
+        last_http_status = HTTP_STATUS_NO_RESPONSE
 
-        # Retry loop
         for attempt in range(MAX_RETRIES):
             try:
                 start_time = time.time()
-                # Capture object_key at request time (may have changed)
+                if first_start is None:
+                    first_start = start_time
                 object_key = self.current_object_key
 
-                data, latency_ms, rtt_ms = await self.storage_system.download_range(
+                data, latency_ms, rtt_ms, http_status = await self.storage_system.download_range(
                     object_key, range_start, range_length
                 )
                 end_time = time.time()
+                last_http_status = int(http_status)
 
                 if data:
-                    # CRITICAL: Capture phase_id at RECORD CREATION time, not request start time
-                    # This ensures long-running requests (60s+ with retries) get tagged with
-                    # the phase they actually completed in, not the phase they started in
                     current_phase_id = self.current_phase_id
-
-                    # Use cached total_http_requests (updated once per phase, not per request)
-                    # OPTIMIZATION: Eliminates IPC overhead - was ~30,720 calls/sec, now 0
-                    # Cached value is synchronized on every phase transition in start_workers()
                     concurrency = self._cached_total_http_requests
 
-                    # Create record
                     record = BenchmarkRecord(
-                        thread_id=worker_id + (self.process_id * 10000),  # Unique across processes
+                        thread_id=worker_id + (self.process_id * 10000),
                         conn_id=worker_id,
                         object_key=object_key,
                         range_start=range_start,
@@ -245,35 +242,47 @@ class WorkerPool:
                         bytes=len(data),
                         latency_ms=latency_ms,
                         rtt_ms=rtt_ms,
-                        http_status=200,
+                        http_status=last_http_status,
                         concurrency=concurrency,
-                        phase_id=current_phase_id,  # Use current phase, not start phase
-                        start_ts=start_time,
+                        retry_count=attempt,
+                        phase_id=current_phase_id,
+                        start_ts=first_start,
                         end_ts=end_time,
                     )
-
-                    # Store in memory (will be flushed to disk periodically)
                     self.phase_records.append(record)
                     return True
-                else:
-                    # download_range returned None (timeout or error)
-                    # Treat as failure and retry
-                    if attempt < MAX_RETRIES - 1:
-                        # Exponential backoff before retry
-                        backoff = min(2 ** attempt, 30)
-                        await asyncio.sleep(backoff)
-                        continue  # Retry
-                    else:
-                        # All retries exhausted
-                        return False
+
+                if attempt < MAX_RETRIES - 1:
+                    backoff = min(2 ** attempt, 30)
+                    await asyncio.sleep(backoff)
 
             except Exception as e:
-                if attempt == MAX_RETRIES - 1:
-                    logger.debug(f"Process {self.process_id} worker {worker_id}: All retries failed: {e}")
-                    return False
+                last_http_status = HTTP_STATUS_NO_RESPONSE
+                if attempt < MAX_RETRIES - 1:
+                    await asyncio.sleep(min(2 ** attempt, 30))
                 else:
-                    await asyncio.sleep(min(2 ** attempt, 30))  # Exponential backoff
+                    logger.debug(
+                        f"Process {self.process_id} worker {worker_id}: All retries failed: {e}"
+                    )
 
+        end_time = time.time()
+        fail_record = BenchmarkRecord(
+            thread_id=worker_id + (self.process_id * 10000),
+            conn_id=worker_id,
+            object_key=self.current_object_key,
+            range_start=range_start,
+            range_len=range_length,
+            bytes=0,
+            latency_ms=0.0,
+            rtt_ms=0.0,
+            http_status=last_http_status,
+            concurrency=self._cached_total_http_requests,
+            retry_count=MAX_RETRIES,
+            phase_id=self.current_phase_id,
+            start_ts=first_start if first_start is not None else end_time,
+            end_ts=end_time,
+        )
+        self.phase_records.append(fail_record)
         return False
 
     async def stop_workers(self):

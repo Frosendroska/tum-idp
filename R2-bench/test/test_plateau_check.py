@@ -28,7 +28,7 @@ class TestPlateauDetection:
     def test_no_measurements(self):
         """Should return False when no measurements."""
         plateau = PlateauCheck()
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         assert result is False
         assert "Not enough measurements" in reason
     
@@ -36,18 +36,18 @@ class TestPlateauDetection:
         """Should return False with only one measurement."""
         plateau = PlateauCheck()
         plateau.add_measurement(8, 100, 5)
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         assert result is False
-        assert "Not enough measurements" in reason
-    
+        assert "need" in reason.lower() and "2" in reason
+
     def test_two_measurements(self):
-        """Should return False with two measurements."""
+        """With two measurements, diminishing-returns rule is not applied yet."""
         plateau = PlateauCheck()
         plateau.add_measurement(8, 100, 5)
         plateau.add_measurement(16, 120, 5)
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         assert result is False
-        assert "Not enough measurements for plateau detection" in reason
+        assert "two ramp steps" in reason.lower() or "≥3" in reason
     
     def test_system_bandwidth_limit(self):
         """Should stop when system bandwidth limit is reached."""
@@ -55,9 +55,9 @@ class TestPlateauDetection:
         plateau.add_measurement(8, 100, 5)
         plateau.add_measurement(16, 6000, 5)  # Exceeds limit
         
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         assert result is True
-        assert "System bandwidth limit reached" in reason
+        assert "System bandwidth ceiling" in reason
     
     def test_clean_improvement(self):
         """Should continue when throughput is clearly improving."""
@@ -66,7 +66,7 @@ class TestPlateauDetection:
         plateau.add_measurement(16, 120, 5)  # +20%
         plateau.add_measurement(24, 140, 5)  # +16.7%
         
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         assert result is False
         assert "still improving" in reason
     
@@ -77,20 +77,20 @@ class TestPlateauDetection:
         plateau.add_measurement(16, 140, 5)  # 0%
         plateau.add_measurement(24, 140, 5)  # 0%
         
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         assert result is True
-        assert "improvement below" in reason.lower()
-    
+        assert "below" in reason.lower() and "threshold" in reason.lower()
+
     def test_small_improvements(self):
-        """Should detect plateau with small improvements."""
+        """Should detect plateau when last two steps are strictly below PLATEAU_THRESHOLD."""
         plateau = PlateauCheck()
         plateau.add_measurement(8, 100, 5)
-        plateau.add_measurement(16, 105, 5)  # +5%
-        plateau.add_measurement(24, 108, 5)  # +2.9%
-        
-        result, reason = plateau.is_plateau_reached()
+        plateau.add_measurement(16, 104, 5)  # +4% (< 5%)
+        plateau.add_measurement(24, 106, 5)  # +1.92% (< 5%)
+
+        result, reason, _stop = plateau.is_plateau_reached()
         assert result is True
-        assert "improvement below" in reason.lower()
+        assert "plateau" in reason.lower()
     
     def test_mixed_small_changes(self):
         """Should detect plateau with mixed small changes."""
@@ -99,7 +99,7 @@ class TestPlateauDetection:
         plateau.add_measurement(16, 103, 5)  # +3%
         plateau.add_measurement(24, 101, 5)  # -2%
         
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         assert result is True
     
     def test_degradation_from_peak(self):
@@ -109,11 +109,11 @@ class TestPlateauDetection:
         plateau.add_measurement(16, 150, 5)  # Peak
         plateau.add_measurement(24, 100, 5)  # Drops 33% from peak
         
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         assert result is True
-        assert "degradation from peak" in reason.lower()
-        assert "150.0" in reason
-        assert "100.0" in reason
+        assert "performance degradation" in reason.lower()
+        assert "150.00" in reason or "150.0" in reason
+        assert "100.00" in reason or "100.0" in reason
     
     def test_severe_degradation(self):
         """Should stop on severe single-step degradation."""
@@ -122,9 +122,9 @@ class TestPlateauDetection:
         plateau.add_measurement(16, 150, 5)
         plateau.add_measurement(24, 50, 5)  # -66% drop
         
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         assert result is True
-        assert "severe degradation" in reason.lower() or "degradation from peak" in reason.lower()
+        assert "performance degradation" in reason.lower()
     
     def test_gradual_decline(self):
         """Should stop when throughput consistently declines."""
@@ -133,7 +133,7 @@ class TestPlateauDetection:
         plateau.add_measurement(16, 120, 5)  # -14.3%
         plateau.add_measurement(24, 100, 5)  # -16.7%
         
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         # Should either detect degradation from peak or consistent decline
         assert result is True
     
@@ -146,7 +146,7 @@ class TestPlateauDetection:
         plateau.add_measurement(16, 108, 5)  # +8%
         plateau.add_measurement(24, 115, 5)  # +6.5%
         
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         # With 5% threshold, +8% and +6.5% don't trigger plateau
         assert result is False
     
@@ -169,7 +169,7 @@ class TestPlateauDetection:
         assert summary['measurements_count'] == 3
         assert 'plateau_reached' in summary
         assert 'reason' in summary
-        assert summary['last_measurement']['concurrency'] == 24
+        assert summary["last_measurement"]["workers_per_core"] == 24
         assert summary['last_measurement']['throughput_gbps'] == 140
     
     def test_peak_is_first_measurement(self):
@@ -179,11 +179,11 @@ class TestPlateauDetection:
         plateau.add_measurement(16, 140, 5)  # -6.7%
         plateau.add_measurement(24, 120, 5)  # -14.3%
         
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         # Should detect degradation (120 is 20% below 150)
         assert result is True
-        assert "degradation from peak" in reason.lower()
-    
+        assert "performance degradation" in reason.lower()
+
     def test_spike_then_plateau(self):
         """Should handle temporary spike followed by plateau."""
         plateau = PlateauCheck()
@@ -191,10 +191,10 @@ class TestPlateauDetection:
         plateau.add_measurement(16, 200, 5)  # Spike
         plateau.add_measurement(24, 105, 5)  # Below spike but above initial
         
-        result, reason = plateau.is_plateau_reached()
+        result, reason, _stop = plateau.is_plateau_reached()
         # Should detect degradation from peak of 200
         assert result is True
-        assert "degradation from peak" in reason.lower()
+        assert "performance degradation" in reason.lower()
 
 
 def run_examples():
@@ -230,7 +230,7 @@ def run_examples():
         
         for i, (concurrency, throughput) in enumerate(measurements):
             plateau.add_measurement(concurrency, throughput, 5)
-            is_plateau, reason = plateau.is_plateau_reached()
+            is_plateau, reason, _stop = plateau.is_plateau_reached()
             
             if i == 0:
                 print(f"  Step {i+1}: {concurrency} conn -> {throughput} Gbps")

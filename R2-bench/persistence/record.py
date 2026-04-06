@@ -19,7 +19,8 @@ class BenchmarkRecord:
         bytes: Number of bytes successfully downloaded
         latency_ms: Total latency from request start to completion (ms)
         rtt_ms: Round-trip time to first byte (ms)
-        http_status: HTTP status code of the response
+        http_status: HTTP status code of the response (0 = non-HTTP failure; see configuration)
+        retry_count: Failed attempts before success; on final failure equals MAX_RETRIES
         concurrency: Total concurrent HTTP requests in flight (= total_workers × pipeline_depth)
         phase_id: Identifier for the benchmark phase
         start_ts: Request start timestamp (Unix epoch)
@@ -36,6 +37,7 @@ class BenchmarkRecord:
     rtt_ms: float
     http_status: int
     concurrency: int  # Total concurrent HTTP requests (workers × cores × pipeline_depth)
+    retry_count: int = 0
     phase_id: str = ""
     start_ts: float = field(default_factory=time.time)
     end_ts: float = field(default_factory=time.time)

@@ -89,6 +89,7 @@ class ParquetPersistence:
                     'rtt_ms': record.rtt_ms,
                     'http_status': record.http_status,
                     'concurrency': record.concurrency,
+                    'retry_count': getattr(record, 'retry_count', 0),
                     'phase_id': record.phase_id,
                     'start_ts': record.start_ts,
                     'end_ts': record.end_ts
@@ -143,6 +144,7 @@ class ParquetPersistence:
                 'rtt_ms': record.rtt_ms,
                 'http_status': record.http_status,
                 'concurrency': record.concurrency,
+                'retry_count': getattr(record, 'retry_count', 0),
                 'phase_id': record.phase_id,
                 'start_ts': record.start_ts,
                 'end_ts': record.end_ts
