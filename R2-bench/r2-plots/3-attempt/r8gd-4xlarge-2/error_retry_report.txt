@@ -1,0 +1,20 @@
+HTTP status distribution (one row per logical request)
+============================================================
+  206: 58,287
+
+Retry / HTTP attempt summary
+============================================================
+  Total logical requests: 58,287
+  Successful (HTTP 200/206): 58,287
+  Failed (after retries exhausted): 0
+  Success rate: 100.0000%
+  Successful that needed >=1 retry: 6
+  Sum of retry_count (failed HTTP attempts across all rows): 6
+  Approx. total HTTP round-trips: 58,293
+    (successful responses + prior failed attempts)
+  Max retry_count on any row: 1
+
+Notes:
+  - Synthetic codes: 0 = non-HTTP/transport; 408 = local asyncio/read timeout.
+  - Server errors (429, 503, …) use the HTTP status from the API when available.
+  - On final failure, retry_count equals MAX_RETRIES (each attempt failed).
