@@ -1,0 +1,229 @@
+R2 Benchmark AI Summary — r8gd-4xlarge Run 3
+=============================================
+Instance type : r8gd.4xlarge
+Data source   : r8gd-4xlarge-3-capacity_check_r2_20260406_225527.parquet
+Run wall-clock: 2026-04-06 21:43 – 22:57 (1.19 hours)
+Total records : 45,864 logical requests (100% success rate, HTTP 206)
+Total data    : 4,478.91 GB transferred
+Avg throughput: 8.97 Gbps overall
+Avg latency   : 6,423.8 ms  |  P50 5,359 ms  |  P95 13,982 ms  |  P99 18,148 ms
+Concurrency   : 48 (warmup/ramp_1) → 96 (ramp_2 / steady_state) → 144 (ramp_3)
+Retries       : 7 requests needed exactly 1 retry; 0 permanent failures
+
+CONTEXT: This is the THIRD run of the r8gd.4xlarge experiment (the second consecutive long run,
+starting ≈73 minutes after Run 2 ended). It replicates the same benchmark configuration.
+
+
+=== FILE-BY-FILE DESCRIPTIONS ===
+
+--- performance_dashboard.png ---
+A 3×2 grid overview of the entire benchmark run. Contains:
+  • Top-left  — Throughput timeline (30 s windows): shows the same sharp two-regime behaviour
+    as Run 2, but with a more immediate cliff (see throughput_timeline.png description).
+  • Top-right — Latency distribution histogram (right-skewed, peak ≈3,000–5,000 ms, tail to 50 s).
+  • Mid-left  — Throughput vs concurrency (V-shape dip at 96 to ≈8 Gbps, recovery at 144 to
+    ≈13.5 Gbps).
+  • Mid-right — Request success rate bar chart: single tall green bar at 45,864 "Successful",
+    zero failed.
+  • Bot-left  — Latency percentiles: P50≈5,358 ms, P90≈11,700 ms, P95≈13,982 ms, P99≈18,148 ms.
+    These are noticeably higher than Run 2 (P99 was 14,957 ms), consistent with more requests
+    being served in the throttled regime.
+  • Bot-right — Throughput by phase bar: warmup/ramp_1/ramp_2/ramp_3 ≈14 Gbps; steady_state
+    bar at only ≈8 Gbps — a larger gap than in Run 2.
+  • Inset key-metrics text box confirms all headline numbers.
+KEY INSIGHT: The steady_state throughput (8.04 Gbps average) is substantially lower than Run 2
+(10.91 Gbps), because in Run 3 the throttling onset was almost immediate at the start of
+steady state, leaving no high-throughput window within steady state.
+
+
+--- throughput_timeline.png ---
+Line plot, 30-second prorated windows. X-axis = wall clock time (06 21:43–22:57). Y-axis = Gbps.
+Colour-coded by phase: red=warmup, blue=ramp_1, green=ramp_2, purple=ramp_3, orange=steady_state.
+
+Observed behaviour (CRITICAL FINDING):
+  1. Warmup + ramp phases (21:43–22:00): ~14.0–14.4 Gbps, very stable, minimal variance.
+     Identical to Run 2 ramp performance.
+  2. Steady_state onset (~22:00–22:02): throughput immediately drops from 14.3 Gbps to ≈12.1 Gbps
+     in the first window, then plummets to ≈7.2 Gbps within the next window.
+  3. Post-cliff steady_state (22:02–22:57): extremely flat plateau at ≈7.15–7.2 Gbps for the
+     entire ≈55 minutes. Variance is minimal; the line appears nearly ruler-straight.
+  4. Terminal dip at ≈22:57: single window drops to ≈6.3 Gbps (end-of-run artefact, also seen
+     in Run 2).
+
+COMPARISON WITH RUN 2: In Run 2, the cliff occurred ≈28 minutes into steady state. In Run 3,
+the cliff occurs at the VERY BEGINNING of steady state (within the first 2 minutes). Both runs
+end at the same ≈7.1 Gbps floor. The earlier onset in Run 3 is consistent with the instance
+having less "burst budget" remaining at the start of this run (it ran ≈73 min after Run 2).
+
+
+--- per_second_throughput_timeline.png ---
+Scatter/line plot at 1-second granularity. Y-axis range: 0–18 Gbps.
+
+  • Ramp phases (21:43–22:00): per-second values cluster ≈12–17 Gbps; typical oscillations.
+  • Steady_state (22:02 onwards): per-second band immediately compresses to ≈6–9 Gbps with
+    floor ≈5 Gbps. Notably MUCH less volatile than Run 2's pre-cliff steady state.
+  • The contrast with Run 2 is stark: Run 2 showed ≈12–17 Gbps oscillations for much of steady
+    state; Run 3 shows only ≈6–9 Gbps throughout.
+  • Near-zero outlier at end of run (~22:57), same as Run 2.
+
+This plot confirms Run 3 operates entirely in the throttled regime during steady state, with the
+throttle engaged immediately and maintained uniformly.
+
+
+--- throughput_vs_concurrency.png ---
+Four sub-plots comparing per-concurrency-level statistics.
+
+  Top-left  — Throughput (Gbps) vs Concurrency: V-shape. 48→14.0 Gbps, 96→7.98 Gbps (deeper
+              dip than Run 2's 10.55 Gbps, as all 96-concurrency data is from throttled period),
+              144→13.5 Gbps.
+  Top-right — Request Rate (req/s) vs Concurrency: same V-shape. 48→16.7 req/s, 96→9.8 req/s,
+              144→16.1 req/s.
+  Bot-left  — Average Latency (ms) vs Concurrency with ±1 std shaded band:
+              48→2,084 ms, 96→6,943 ms (peak), 144→6,272 ms. The peak is at 96, not monotonic.
+              This differs from Run 2 (where 144 > 96); here the throttled 96-concurrency data
+              shows higher mean latency than 144 (shorter ramp_3 window only).
+  Bot-right — Efficiency (Gbps per connection): 48→0.292, 96→0.083, 144→0.094.
+              The concurrency-96 efficiency (0.083) is the lowest across both runs, confirming
+              that sustained concurrency-96 load under throttling is particularly inefficient.
+
+
+--- latency_histogram.png ---
+Four sub-plots titled "Comprehensive Latency Analysis".
+
+  Top-left  — Overall linear-scale histogram (45,864 requests): right-skewed, peak bin
+              ≈3,000–5,000 ms, tail extending to ≈50,000 ms. Mode is shifted higher than Run 2,
+              consistent with more time spent in the throttled (higher latency) regime.
+  Top-right — Log-scale Y-axis: smooth decay from ≈10,000 counts at peak to single digits above
+              30,000 ms; isolated outliers at ≈38,000–50,000 ms. Tail is heavier than Run 2.
+  Bot-left  — CDF: 50th percentile ≈5,360 ms, 95th ≈13,980 ms, 99th ≈18,150 ms.
+              Stats inset box: Mean=6,423.8 ms, Std=3,922.8 ms. Both mean and Std are higher
+              than Run 2 (5,602 ms / 2,885 ms), reflecting the longer throttled period.
+  Bot-right — By concurrency: Red (48)=narrow fast cluster ≈1,000–2,500 ms; Blue (96)=wide
+              peak ≈4,000–10,000 ms with long tail; Green (144)=moderate cluster ≈3,000–8,000 ms.
+              The blue (96) distribution is broader and higher than in Run 2, confirming higher
+              latency under throttled steady state.
+
+
+--- latency_boxplot.png ---
+Box-and-whisker plot for each concurrency level.
+
+  Concurrency 48 (teal box, 4,446 requests):
+    Min=818 ms, Q1≈1,100 ms, Median=1,839 ms, Q3≈2,300 ms, max whisker≈4,500 ms.
+    Outliers scattered to ≈17,000 ms. Very similar to Run 2 concurrency-48 statistics.
+
+  Concurrency 96 (yellow box, 38,114 requests):
+    Min≈900 ms (whisker), Q1≈2,500 ms, Median=5,870 ms, Q3≈10,000 ms, max whisker≈17,000 ms.
+    Extreme outlier cloud reaching ≈49,000 ms (maximum in the entire dataset, higher than Run 2).
+    Very wide IQR (≈7,500 ms), much wider than Run 2's 96-concurrency box (IQR ≈4,500 ms),
+    because Run 3's 96-concurrency data spans fully throttled requests with higher variance.
+
+  Concurrency 144 (blue/grey box, 3,304 requests):
+    Q1≈2,500 ms, Median=5,726 ms, Q3≈7,500 ms, max whisker≈12,500 ms.
+    A few outliers to ≈21,500 ms. Slightly narrower than Run 2's concurrency-144.
+
+KEY FINDING: The concurrency-96 P99 for Run 3 (18,724 ms) is substantially higher than Run 2
+(15,176 ms), caused by the higher fraction of throttled-regime requests in Run 3.
+
+
+--- latency_violin_plot.png ---
+Violin plot for the same three concurrency levels.
+
+  Concurrency 48 (green violin): Identical in shape to Run 2. Narrow, dense ≈1,000–3,000 ms.
+  Concurrency 96 (orange violin): Broader than Run 2's equivalent violin, with density extending
+                                   higher (≈0–18,000 ms for the main body). Long thin wisp to
+                                   ≈49,000 ms. Pronounced teardrop shape — denser at lower values
+                                   (warmup/ramp requests) with a long thin high-latency tail from
+                                   the throttled steady-state requests.
+  Concurrency 144 (blue violin):  Similar to Run 2. Denser ≈3,000–8,000 ms range.
+
+Statistics inset: 3 concurrency levels, 45,864 total requests, mean 6,423.8 ms.
+
+
+--- latency_scatter.png ---
+Individual request latency vs concurrency level, with linear regression.
+
+  Trend line: y = 50.7x + 1,616.2 — nearly identical slope (50.7) to Run 2 (51.2), but with a
+  higher intercept (1,616 vs 737), reflecting the higher baseline latency in this run.
+  Concurrency 48:  Dense stripe ≈1,000–5,000 ms; outliers to ≈17,000 ms.
+  Concurrency 96:  Very dense stripe ≈1,000–18,000 ms; heavy outlier cloud to ≈49,000 ms.
+                   Notably heavier tail than Run 2.
+  Concurrency 144: Dense stripe ≈1,500–12,000 ms; outliers to ≈21,000 ms; less extreme than 96.
+
+The regression intercept being ≈880 ms higher than Run 2 quantifies the baseline latency penalty
+of starting the run in a pre-throttled state.
+
+
+--- latency_over_time.png ---
+Two sub-plots tracking latency evolution through the run.
+
+  Top — Scatter of per-request latency vs wall-clock time, coloured by concurrency level.
+        • 21:43–21:55 (warmup+ramp phases, purple/blue/green/yellow): spread ≈500–15,000 ms.
+          ramp_3 (yellow/bright) shows a compact burst with a few spikes to ≈20,000 ms.
+        • 22:00–22:57 (steady_state, teal): Very notable — the latency scatter cloud is
+          noticeably denser and higher than in Run 2's pre-cliff period. Points are distributed
+          broadly ≈1,000–30,000 ms from the very start of steady state.
+          Extreme outlier at ≈49,000 ms visible around 22:18–22:20.
+          The density at high latency (>15,000 ms) increases gradually toward the end of the run.
+
+  Bottom — Rolling average latency (10-request window, red line).
+        • 21:43–21:55: starts ≈2,000 ms, oscillates with transition spikes to ≈8,000 ms.
+        • 22:00–22:57 (entire steady_state): immediately elevated at ≈8,000–12,000 ms, with
+          high volatility throughout. No initial low-latency period as seen in Run 2.
+          The rolling average shows larger excursions (occasional peaks to ≈14,000 ms) compared
+          to Run 2's post-cliff period, consistent with heavier tail latencies.
+
+KEY FINDING: Unlike Run 2 (which had a calm ≈4,000–6,000 ms rolling-average period before the
+cliff), Run 3's steady state is already at the high-latency regime from the first second.
+
+
+--- error_analysis.png ---
+Two-panel chart titled "Errors, HTTP status, and retries".
+
+  Left  — Bar chart: single tall blue bar at HTTP 206, count=45,864. No other status codes.
+  Right — Bar chart: single tall green bar at retry_count=0 (≈45,857 requests); invisible bar
+           at retry_count=1 (7 requests). No retries of 2 or higher.
+
+FINDING: Identical reliability profile to Run 2. Zero permanent failures, only 7 single-retry
+requests out of 45,864 total (99.98% first-attempt success rate). The throttling mechanism does
+not cause HTTP errors; R2 simply delivers data more slowly rather than rejecting requests.
+
+
+=== CROSS-PLOT FINDINGS & KEY OBSERVATIONS ===
+
+1. IMMEDIATE THROTTLING ONSET: The most critical difference from Run 2 is that throttling
+   engaged within the first 2 minutes of steady state (vs ≈28 min into steady state in Run 2).
+   Both runs converge to the same ≈7.1 Gbps floor. This pattern strongly suggests a burst-
+   credit or token-bucket mechanism: Run 2 exhausted its burst credits after ≈28 min; Run 3
+   started with nearly depleted credits (due to the prior Run 2 occurring only ≈73 min earlier),
+   so the burst allocation was exhausted almost immediately.
+
+2. IDENTICAL THROTTLED FLOOR: Both Run 2 and Run 3 converge to precisely ≈7.1–7.2 Gbps in the
+   throttled regime. The near-identical floor value (within 1%) across two independent runs
+   separated by >1 hour confirms this is a hard infrastructure-imposed ceiling, not a
+   measurement artefact.
+
+3. RAMP PHASES FULLY UNAFFECTED: Both runs achieve ≈14 Gbps across all ramp phases (warmup,
+   ramp_1, ramp_2, ramp_3). The short duration (<4 min) of each ramp segment does not deplete
+   burst credits. This suggests the burst threshold is volume-based (~900 GB or ≈28 min at
+   14 Gbps), not concurrency-based.
+
+4. HIGHER OVERALL LATENCY THAN RUN 2: The overall mean (6,424 vs 5,602 ms), P95 (13,982 vs
+   11,347 ms), and P99 (18,148 vs 14,957 ms) are all higher in Run 3. This is a direct
+   consequence of spending nearly 100% of steady-state time in the throttled regime (vs ≈53%
+   in Run 2). In the throttled regime, R2 delivers data at half the speed, roughly doubling
+   transfer latency for the same object size.
+
+5. FEWER TOTAL REQUESTS: Run 3 completed 45,864 requests vs Run 2's 58,287 (≈21% fewer).
+   At 8.97 Gbps average (vs 11.40 Gbps), Run 3 transferred 4,479 GB vs 5,692 GB. Both runs
+   ran for the same wall-clock duration (1.19 hours), so the throughput difference directly
+   explains the request count gap.
+
+6. PERFECT RELIABILITY ACROSS BOTH RUNS: Despite significant throughput throttling, R2 never
+   returned errors or permanently failed requests in either run. The service degrades gracefully
+   under sustained high load by reducing bandwidth, not by dropping connections.
+
+7. CONCURRENCY-96 IS THE STRESS POINT: In both runs, concurrency-96 (the steady-state level)
+   bears the full weight of throttled performance. Concurrency-48 and 144 (short ramp phases)
+   always see the high-throughput regime. An experiment design that kept concurrency at 48 or
+   144 for the full steady state would likely delay or avoid throttling onset, since each
+   connection contributes less total volume per unit time at 48 connections than at 96.
