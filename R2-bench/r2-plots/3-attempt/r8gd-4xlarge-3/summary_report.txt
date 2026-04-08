@@ -2,26 +2,26 @@
 R2 Benchmark Summary Report
 ===========================
 
-Data Source: /home/ebraun/tum-idp/R2-bench/r2-results/3-attempt/r8gd-4xlarge-3-capacity_check_r2_20260406_225527.parquet
-Total Records: 45,864
-Successful Requests: 45,864
+Data Source: /home/ebraun/tum-idp/R2-bench/r2-results/3-attempt/r8gd-4xlarge-3-capacity_check_r2_20260407_235445.parquet
+Total Records: 120,036
+Successful Requests: 120,036
 Success Rate: 100.00%
 
 Duration: 1.19 hours
-Total Data: 4478.91 GB
-Average Throughput: 8.97 Gbps
+Total Data: 5861.13 GB
+Average Throughput: 11.74 Gbps
 
 Latency Statistics (ms):
-  Average: 6423.8
-  P50: 5358.5
-  P95: 13981.5
-  P99: 18147.8
+  Average: 4478.9
+  P50: 3852.8
+  P95: 9643.1
+  P99: 13674.3
 
-Concurrency Levels: [np.int64(48), np.int64(96), np.int64(144)]
+Concurrency Levels: [np.int64(96), np.int64(192), np.int64(288)]
 
 Retries / HTTP attempts
-  Sum of retry_count (failed attempts before outcome): 7
-  Successful rows that needed >=1 retry: 7
-  Approx. total HTTP round-trips: 45,871
+  Sum of retry_count (failed attempts before outcome): 58
+  Successful rows that needed >=1 retry: 58
+  Approx. total HTTP round-trips: 120,094
   Max retry_count on any row: 1
             

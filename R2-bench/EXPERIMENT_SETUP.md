@@ -56,6 +56,30 @@ python3 cli.py check --storage r2 \
 
 ---
 
+## r8gd.4xlarge - Iso-concurrency pair (C=288, 1 h steady)
+
+Same total HTTP concurrency for both runs: **C = 16 × W × D = 288** (50 MB / p=6 with W=3 vs 100 MB / p=3 with W=6), so offered load matches while chunk size and pipeline differ. Run from `R2-bench/` with credentials set.
+
+**A — 50 MB, p=6, steady at W=3 → C=288**
+
+```bash
+RANGE_SIZE_MB=50 PIPELINE_DEPTH=6 python3 cli.py check --storage r2 \
+  --bandwidth 15.0 --processes 16 \
+  --workers 1 --ramp-step-workers 1 --ramp-step-minutes 3 \
+  --max-workers 3 --pipeline-depth 6 --steady-state-hours 1
+```
+
+**B — 100 MB, p=3, steady at W=6 → C=288**
+
+```bash
+RANGE_SIZE_MB=100 PIPELINE_DEPTH=3 python3 cli.py check --storage r2 \
+  --bandwidth 15.0 --processes 16 \
+  --workers 1 --ramp-step-workers 1 --ramp-step-minutes 3 \
+  --max-workers 6 --pipeline-depth 3 --steady-state-hours 1
+```
+
+---
+
 ## c5n.9xlarge - High Performance (50 Gbps)
 
 **Specs:** 36 vCPUs, 50 Gbps, 96 GB RAM (Intel Cascade Lake)

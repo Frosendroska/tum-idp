@@ -1,16 +1,16 @@
 HTTP status distribution (one row per logical request)
 ============================================================
-  206: 45,864
+  206: 120,036
 
 Retry / HTTP attempt summary
 ============================================================
-  Total logical requests: 45,864
-  Successful (HTTP 200/206): 45,864
+  Total logical requests: 120,036
+  Successful (HTTP 200/206): 120,036
   Failed (after retries exhausted): 0
   Success rate: 100.0000%
-  Successful that needed >=1 retry: 7
-  Sum of retry_count (failed HTTP attempts across all rows): 7
-  Approx. total HTTP round-trips: 45,871
+  Successful that needed >=1 retry: 58
+  Sum of retry_count (failed HTTP attempts across all rows): 58
+  Approx. total HTTP round-trips: 120,094
     (successful responses + prior failed attempts)
   Max retry_count on any row: 1
 
