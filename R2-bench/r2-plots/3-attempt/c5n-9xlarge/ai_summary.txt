@@ -1,0 +1,250 @@
+R2 Benchmark AI Summary — c5n.9xlarge
+======================================
+Instance type : c5n.9xlarge
+Data source   : results/capacity_check_r2_20260207_214233.parquet
+Run wall-clock: 2026-02-07 21:30 – 21:42 (0.19 hours, ~11.5 minutes)
+Total records : 32,394 logical requests (100% success rate, HTTP 200)
+Total data    : 3,163.48 GB transferred
+Avg throughput: 39.51 Gbps overall
+Avg latency   : 7,950.9 ms  |  P50 7,548 ms  |  P95 12,383 ms  |  P99 14,775 ms
+Concurrency   : 324 (warmup/ramp_1) → 432 (ramp_2) → 540 (ramp_3)
+Retries       : not recorded (no error_retry_report.txt; error_analysis.png shows HTTP 200 only)
+
+CONTEXT: This is a ramp-only experiment — there is NO steady_state phase. The benchmark runs
+warmup → ramp_1 → ramp_2 → ramp_3 and ends. Concurrency steps are 324 → 432 → 540.
+This run is notable for its very high absolute throughput (~40 Gbps), consistent with the
+c5n.9xlarge's 50 Gbps network capability. No throttling cliff is observed because the run
+ends before any sustained-load throttle can engage.
+
+
+=== FILE-BY-FILE DESCRIPTIONS ===
+
+--- performance_dashboard.png ---
+A 3×2 grid overview of the entire benchmark run. Contains:
+  • Top-left  — Throughput timeline (30 s windows): monotonically declining trend across phases;
+    warmup/ramp_1 ≈40.5–41.1 Gbps (blue), ramp_2 ≈38.9–39.9 Gbps (green), ramp_3 ≈37.9–38.6 Gbps
+    (purple) with a sharp drop to ≈33.3 Gbps in the final window of ramp_3.
+  • Top-right — Latency distribution histogram: right-skewed with peak ≈5,000–7,000 ms, tail to
+    ≈25,000 ms. The distribution is noticeably wider than lower-concurrency experiments.
+  • Mid-left  — Throughput vs concurrency: monotonically decreasing line from 324→41.2 Gbps,
+    432→37.4 Gbps, 540→36.9 Gbps. No V-shape — this is a pure ramp experiment.
+  • Mid-right — Request success rate bar chart: single tall green bar at 32,394 "Successful",
+    zero failed.
+  • Bot-left  — Latency percentiles bar chart: P50≈7,500 ms, P90≈11,300 ms, P95≈12,383 ms,
+    P99≈14,775 ms. All bars grow steadily, no dramatic jump.
+  • Bot-right — Throughput by phase bar chart: warmup≈40.5 Gbps, ramp_1≈40.9 Gbps,
+    ramp_2≈39.3 Gbps, ramp_3≈38.0 Gbps — a gentle staircase decline.
+  • Inset key-metrics text box: Duration 0.19 hrs, 3,163.48 GB, 39.51 Gbps, Mean 7,950.9 ms,
+    P95 12,383.2 ms, P99 14,775.0 ms, 100% success, concurrency [324, 432, 540].
+KEY INSIGHT: All four phases deliver roughly similar throughput (~38–41 Gbps). There is no
+throughput cliff. The primary signal is a smooth decline in throughput and rise in latency
+as concurrency increases.
+
+
+--- throughput_timeline.png ---
+Line plot, 30-second prorated windows. X-axis = wall clock time (07 21:30–21:42). Y-axis = Gbps.
+Colour-coded by phase: red=warmup, blue=ramp_1, green=ramp_2, purple=ramp_3. No steady_state.
+
+Observed behaviour:
+  1. Warmup (21:30–21:31, red): rises from ≈39.9 Gbps to ≈41.1 Gbps — ramp-up artefact.
+  2. Ramp_1 (21:31–21:35, blue): stable band ≈40.2–41.1 Gbps with one dip to ≈40.2 Gbps.
+     Very consistent, high-throughput phase.
+  3. Ramp_2 (21:35–21:39, green): drops to ≈38.9–39.9 Gbps. A step-down from ramp_1 but still
+     stable. The transition from ramp_1 to ramp_2 is visible as a clear level change.
+  4. Ramp_3 (21:39–21:42, purple): drops further to ≈38.3–38.6 Gbps, then falls sharply to
+     ≈33.3 Gbps in the final 30-second window. This end-of-run dip is consistent with the
+     benchmark winding down (last batch of requests completing, pipeline draining).
+
+FINDING: The throughput progression is a clean step-down with each concurrency increase.
+Each phase is internally stable. The absence of a dramatic cliff distinguishes this from
+the r8gd.4xlarge steady-state experiments.
+
+
+--- per_second_throughput_timeline.png ---
+Scatter/line plot at 1-second granularity. Y-axis range: 0–45+ Gbps.
+
+  • Warmup (red, 21:30–21:31): Starts ≈28 Gbps (pipeline not yet full), spikes to ≈45 Gbps,
+    then oscillates ≈34–45 Gbps. High variance during fill-up.
+  • Ramp_1 (blue, 21:31–21:35): Stabilises to ≈38–45 Gbps band with consistent oscillations.
+    Mean ≈40–41 Gbps. Tightest and highest band of all phases.
+  • Ramp_2 (green, 21:35–21:39): Band compresses slightly to ≈37–42 Gbps. A brief dip to
+    ≈34 Gbps visible at the phase transition (~21:35). Stable throughout.
+  • Ramp_3 (purple, 21:39–21:42): Band ≈36–42 Gbps, slightly more variable than ramp_2.
+    A near-zero outlier (~0 Gbps) appears at the very end of the run (~21:42), same end-of-run
+    drain artefact visible in the 30 s view.
+
+This plot confirms no throttling occurred: all phases stay in the same broad 36–45 Gbps
+operating range, with the per-second floor rising with each concurrency step.
+
+
+--- throughput_vs_concurrency.png ---
+Four sub-plots titled "Throughput vs Concurrency Analysis".
+
+  Top-left  — Throughput (Gbps) vs Concurrency: monotonically decreasing line.
+              324→41.2 Gbps, 432→37.4 Gbps, 540→36.9 Gbps.
+              The drop from 324 to 432 is larger (~3.8 Gbps) than 432 to 540 (~0.5 Gbps),
+              suggesting diminishing marginal throughput loss above 432 connections.
+  Top-right — Request Rate (req/s) vs Concurrency: monotonically decreasing.
+              324→48.0 req/s, 432→44.6 req/s, 540→43.9 req/s.
+              Same pattern as throughput — more connections do not increase request rate.
+  Bot-left  — Average Latency (ms) vs Concurrency with ±1 std shaded band:
+              324→5,942 ms, 432→8,254 ms, 540→10,378 ms. Monotonically increasing.
+              The shaded ±1σ band widens substantially at higher concurrency, indicating
+              growing latency variance. At 540, σ spans roughly 5,000–15,500 ms.
+  Bot-right — Efficiency (Gbps per connection):
+              324→0.127, 432→0.087, 540→0.068. Steeply declining.
+              Each additional connection beyond 324 contributes markedly less bandwidth.
+
+KEY FINDING: Higher concurrency does not improve throughput on this instance. The optimal
+operating point is the lowest concurrency (324), which delivers the highest throughput,
+lowest latency, and best per-connection efficiency.
+
+
+--- latency_histogram.png ---
+Four sub-plots titled "Comprehensive Latency Analysis".
+
+  Top-left  — Overall linear-scale histogram (32,394 requests): right-skewed, bimodal-ish
+              shape. First peak ≈5,500–6,500 ms (ramp_1/324-concurrency requests), second
+              broader hump ≈7,000–9,000 ms (ramp_2), with a further tail to ≈28,000 ms.
+              Mode is well below mean (7,950.9 ms), confirming positive skew.
+  Top-right — Log-scale Y-axis: reveals smooth decay from ~3,200 at peak to single-digit
+              counts above 20,000 ms. Isolated outliers at ≈25,000–28,000 ms.
+  Bot-left  — CDF: 50th percentile ≈7,548 ms, 90th ≈11,300 ms, 95th ≈12,383 ms,
+              99th ≈14,775 ms. Stats inset: Mean=7,950.9 ms, Std=2,462.4 ms, Total=32,394.
+  Bot-right — Latency distribution by concurrency (overlapping bars):
+              Red (324): narrow, centred ≈5,000–7,000 ms, peak ~3,000 counts.
+              Blue (432): shifted right, centred ≈7,000–9,500 ms, peak ~2,000 counts.
+              Green (540): rightmost, broad, centred ≈8,500–12,500 ms, peak ~2,300 counts.
+              Three clearly separated distributions with progressively heavier tails.
+
+
+--- latency_boxplot.png ---
+Box-and-whisker plot for the three concurrency levels.
+
+  Concurrency 324 (teal box, 13,193 requests):
+    Min≈2,454 ms, Q1≈5,000 ms, Median≈5,915 ms, Q3≈6,500 ms, max whisker≈8,800 ms.
+    Outlier scatter from ≈9,000–14,000 ms. Compact IQR (~1,500 ms), lowest of the three.
+
+  Concurrency 432 (yellow box, 9,461 requests):
+    Min≈3,700 ms, Q1≈7,500 ms, Median≈8,246 ms, Q3≈9,000 ms, max whisker≈12,200 ms.
+    Outlier scatter from ≈13,000–19,500 ms. Wider IQR (~1,500 ms), shifted higher.
+
+  Concurrency 540 (blue/grey box, 9,740 requests):
+    Min≈4,300 ms, Q1≈8,500 ms, Median≈10,283 ms, Q3≈11,500 ms, max whisker≈15,700 ms.
+    Outlier cloud from ≈16,000–28,400 ms (heaviest tail). Widest IQR (~3,000 ms).
+
+KEY FINDING: Each concurrency step shifts the entire box upward and stretches the tails,
+particularly at 540. The maximum observed latency (28,434 ms) occurs at concurrency 540.
+Median latency roughly doubles from 324 (5,915 ms) to 540 (10,283 ms).
+
+
+--- latency_violin_plot.png ---
+Violin plot for the three concurrency levels. Statistics inset: 3 levels, 32,394 requests,
+mean 7,950.9 ms.
+
+  Concurrency 324 (green violin): Compact, dense body ≈4,000–8,000 ms. Narrow shape with
+    median ≈5,900 ms. Short upper tail to ≈14,000 ms. Tightest distribution of the three.
+
+  Concurrency 432 (orange violin): Broader body ≈5,000–11,000 ms, with maximum density
+    ≈7,500–8,500 ms. Upper tail extending to ≈19,500 ms. Whiskers span ≈3,700–19,500 ms.
+    Diamond (median) marker at ≈8,250 ms.
+
+  Concurrency 540 (blue violin): Wide, symmetric diamond shape spanning ≈5,000–15,000 ms
+    for the dense body, with maximum density ≈9,000–11,000 ms. Tall upper tail reaching
+    ≈28,000 ms. The widest and heaviest-tailed violin, confirming 540 as the highest-
+    variance operating point.
+
+The three violins form a clear progression: each higher concurrency level shifts the
+density bulk rightward and widens the spread.
+
+
+--- latency_scatter.png ---
+Scatter plot of individual request latency (Y-axis, ms) vs concurrency level (X-axis,
+discrete at 324, 432, 540). Blue dashed regression line.
+
+  Trend line: y = 20.6x + (−700.9) — positive slope (≈21 ms per additional connection).
+  The negative intercept is a fitting artefact from the narrow concurrency range.
+
+  Concurrency 324: Dense vertical stripe ≈2,500–8,800 ms; sparse outliers to ≈14,000 ms.
+  Concurrency 432: Dense vertical stripe ≈3,700–12,500 ms; outliers to ≈19,500 ms.
+                   Wider spread than 324.
+  Concurrency 540: Dense vertical stripe ≈4,300–16,000 ms; outlier cloud to ≈28,400 ms.
+                   Widest spread and heaviest tail.
+
+The regression trend line passes through the mean of each cluster accurately, confirming
+the ~2,100 ms latency increase per 108-connection step is approximately linear in this range.
+
+
+--- latency_over_time.png ---
+Two sub-plots tracking latency evolution through the run.
+
+  Top — Scatter of per-request latency vs wall-clock time, coloured by concurrency level
+        (purple/dark=324, teal=432, yellow=540 — continuous colour scale).
+        • 21:30–21:35 (warmup + ramp_1, purple): points cluster ≈3,000–10,000 ms;
+          several scattered outliers to ≈14,000 ms. Band centre ≈5,500–6,500 ms.
+        • 21:35–21:39 (ramp_2, teal): step-up visible. Band shifts to ≈6,000–11,000 ms.
+          Some outliers to ≈16,000 ms. Density higher and wider than ramp_1.
+        • 21:39–21:42 (ramp_3, yellow): another step-up. Band at ≈6,000–15,000 ms.
+          More frequent high-latency points; one extreme outlier at ≈27,000 ms visible
+          near 21:41–21:42.
+
+  Bottom — Rolling average latency (10-request window, red line).
+        • 21:30–21:35: stable ≈5,500–7,500 ms with periodic spikes to ≈9,000 ms.
+        • 21:35 (ramp_2 transition): rolling average jumps sharply to ≈8,000–9,500 ms.
+          Maintains this elevated level throughout ramp_2.
+        • 21:39 (ramp_3 transition): second jump to ≈10,000–14,000 ms. High volatility,
+          occasional spikes to ≈14,000 ms. Drops back to ≈6,000 ms at run end (drain).
+
+KEY FINDING: The two phase transitions (ramp_1→ramp_2 and ramp_2→ramp_3) are both visible
+as step-changes in rolling latency. Each concurrency increase adds ≈2,000–2,500 ms to the
+rolling average, a clean staircase pattern with no cliff-type collapse.
+
+
+--- error_analysis.png ---
+Single-panel bar chart titled "HTTP Status Code Distribution".
+
+  Single tall blue bar at HTTP 200 (not 206!), count=32,394. No other status codes present.
+
+NOTE: This experiment uses HTTP 200 (full-object response), unlike the r8gd.4xlarge runs
+which used HTTP 206 (range-read / partial content). This indicates a different request type
+or endpoint configuration was used for the c5n.9xlarge benchmark.
+
+FINDING: Perfect reliability — all 32,394 requests succeeded. No error bars. The
+error_retry_report.txt file is absent for this folder; retry statistics are unavailable,
+but the 100% success rate confirms no permanent failures occurred.
+
+
+=== CROSS-PLOT FINDINGS & KEY OBSERVATIONS ===
+
+1. NO THROTTLING CLIFF: Unlike the r8gd.4xlarge runs, c5n.9xlarge shows no abrupt throughput
+   collapse. All phases operate in the 38–41 Gbps band. The short run duration (11.5 min)
+   and ramp-only design mean burst credits were never depleted.
+
+2. MONOTONIC THROUGHPUT DECLINE WITH CONCURRENCY: Throughput decreases with each concurrency
+   step: 324→41.2 Gbps, 432→37.4 Gbps, 540→36.9 Gbps. The decline is steeper between
+   324 and 432 (~3.8 Gbps) than between 432 and 540 (~0.5 Gbps), suggesting saturation
+   above 432 connections.
+
+3. MONOTONIC LATENCY INCREASE WITH CONCURRENCY: Mean latency increases ~2,100–2,300 ms per
+   concurrency step: 324→5,942 ms, 432→8,254 ms, 540→10,378 ms. Combined with the
+   throughput decline, this indicates the c5n.9xlarge is operating near or above its
+   sustainable I/O saturation point at 432+ connections.
+
+4. HIGH ABSOLUTE THROUGHPUT: ~40 Gbps average is the highest of any instance in this
+   experiment series. The c5n.9xlarge has a 50 Gbps network card; this run achieved ~80%
+   of the theoretical maximum NIC bandwidth.
+
+5. HTTP 200 vs HTTP 206: This run uses full-object GET (HTTP 200), not range reads (HTTP 206)
+   as used in the r8gd.4xlarge runs. This difference in request type must be accounted for
+   when comparing latency and throughput values across instance types.
+
+6. EFFICIENCY COLLAPSE AT HIGH CONCURRENCY: Per-connection efficiency drops from 0.127 Gbps
+   at 324 connections to 0.068 Gbps at 540 — a 46% reduction. The optimal concurrency for
+   this instance is 324 or below.
+
+7. PERFECT RELIABILITY: 100% success rate, no retries recorded, single HTTP status code (200).
+   R2 handles this load without any errors even at 540 concurrent connections and ~40 Gbps.
+
+8. END-OF-RUN DRAIN ARTEFACT: Both throughput plots show a near-zero or sharp drop in the
+   final 1–2 windows of ramp_3. This is a run-termination artefact (last in-flight requests
+   completing with no new ones queued), not a performance event.
