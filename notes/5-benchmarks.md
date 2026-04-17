@@ -133,7 +133,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ```
     ![pic](../R2-bench/r2-plots/c6in.16xlarge/per_second_throughput_timeline.png)
 
-- hpc7a.12xlarge (128 GiB,	64 vCPUs, EBS only, 300 Gigabit, $8.8292 hourly)
+- hpc7g.12xlarge (128 GiB,	64 vCPUs, EBS only, 300 Gigabit, $8.8292 hourly)
   - The results are in the [hpc7g.16xlarge](../r2-plots/hpc7g.16xlarge/) folder.
     Summary:
     ```
@@ -194,7 +194,7 @@ The design document of this benchmarking is in (README.md)[R2-bench/README.md].
     ```
     ![pic](../R2-bench/s3-plots/c6in.16xlarge/per_second_throughput_timeline.png)
 
-- hpc7a.12xlarge (128 GiB,	64 vCPUs, EBS only, 300 Gigabit, $8.8292 hourly)
+- hpc7g.12xlarge (128 GiB,	64 vCPUs, EBS only, 300 Gigabit, $8.8292 hourly)
   - The results are in the [hpc7g.16xlarge](../s3-plots/hpc7g.16xlarge/) folder.
     Summary:
     ```
@@ -247,7 +247,7 @@ ramp_3       72             13.99                   14.30                   4306
 ramp_4       104            13.22                   15.31                   6593.0            5701.6
 ```
 
-hpc7a.12xlarge
+hpc7g.12xlarge
 ```
 ====================================================================================================
 Phase        Concurrency    S3 Throughput (Gbps)    R2 Throughput (Gbps)    S3 Latency (ms)    R2 Latency (ms)

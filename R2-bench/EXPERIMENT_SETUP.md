@@ -43,6 +43,8 @@ python3 cli.py check --storage r2 \
 
 ## r8gd.4xlarge - Sweet Spot (15 Gbps)
 
+**Region:** `eu-central-1` (Frankfurt) — all r8gd.4xlarge runs in this document.
+
 **Specs:** 16 vCPUs, 15 Gbps, 128 GB RAM (Graviton3 ARM)
 **Cost:** $1.18/hour
 

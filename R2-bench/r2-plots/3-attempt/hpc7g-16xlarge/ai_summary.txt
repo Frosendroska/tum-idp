@@ -1,0 +1,330 @@
+AI SUMMARY — hpc7g-16xlarge
+Generated from: r2-results/3-attempt/hpc7g-capacity_check_r2_20260208_000827.parquet
+NOTE: Folder is named "hpc7g-16xlarge" but parquet filename references "hpc7g" — possible
+      naming discrepancy between hpc7g.16xlarge and hpc7g.16xlarge instance types.
+
+=============================================================================
+TOP-LEVEL STATISTICS
+=============================================================================
+Total Requests:       36,072
+Successful Requests:  36,072 (100.00%)
+Duration:             0.19 hours (~11.2 minutes)
+Total Data:           3,522.66 GB
+Average Throughput:   44.92 Gbps
+HTTP Method:          HTTP 200 (full-object GET)
+Average Object Size:  ~97.6 MB (3,522.66 GB / 36,072 requests)
+No error_retry_report.txt — zero retries, zero failures.
+
+Overall Latency:
+  Mean:  4,613.6 ms
+  P50:   3,498.1 ms
+  P95:  10,837.2 ms
+  P99:  20,548.9 ms
+  Std:   3,976.5 ms
+
+Concurrency Levels:   [192, 384, 576]
+Phase Structure:      warmup → ramp_1 → ramp_2 → ramp_3  (ramp-only, no steady_state)
+
+=============================================================================
+PHASE BREAKDOWN (throughput_stats_table.txt)
+=============================================================================
+Phase       Dur(s)  Requests   Data(GB)   Tput(Gbps)  Req/s   Latency(ms)  RTT(ms)  Conc
+----------  ------  ---------  ---------  ----------  ------  -----------  -------  ----
+warmup       73.2      4,128     397.3      46.61      56.38    2,367.2     162.7    192
+ramp_1      207.7     10,192     967.9      40.03      49.08    2,562.2     138.8    192
+ramp_2      202.2     11,929   1,129.6      48.00      59.01    4,406.0     684.2    384
+ramp_3      261.7     14,740   1,426.7      46.83      56.33    7,229.3   2,961.1    576
+ALL         673.6     36,072   3,522.7      44.92      53.55    4,613.6   1,219.1    375
+
+Key: ramp_1 phase average (40.03 Gbps) is notably lower than warmup (46.61 Gbps) even
+though both run at concurrency 192. This is caused by two severe transient throughput
+dips within ramp_1 (see per_second_throughput_timeline section below).
+
+RTT ESCALATION: RTT jumps dramatically with concurrency — 138.8 ms (192) → 684.2 ms
+(384) → 2,961.1 ms (576). This is a strong signal of increasing queueing / server-side
+back-pressure at higher concurrency. Not as extreme as c6in-32xlarge run 1 (5,925 ms)
+but still a significant trend.
+
+=============================================================================
+LATENCY BY CONCURRENCY (latency_stats_table.txt)
+=============================================================================
+Conc   Count   Mean(ms)  P50(ms)  P95(ms)  P99(ms)   Min(ms)  Max(ms)
+-----  ------  --------  -------  -------  -------   -------  -------
+192    13,320   2,504.3   1,978.1  4,491.0  12,179.1   919.0   45,753.9
+384    11,128   4,406.0   3,607.8  9,328.3  18,365.5  1,005.8  53,617.4
+576    11,624   7,229.3   6,428.1 13,784.2  24,037.4  1,282.8  57,531.4
+ALL    36,072   4,613.6   3,498.1 10,837.2  20,548.9   919.0   57,531.4
+
+Dataset maximum: 57,531.4 ms at concurrency 576.
+Mean latency roughly triples from 192 to 576, a near-linear scaling with concurrency.
+
+=============================================================================
+PLOT DESCRIPTIONS
+=============================================================================
+
+--- performance_dashboard.png ---
+Six-panel overview dashboard (3×2 grid).
+
+Top-left — Throughput Timeline (30s windows):
+  Warmup (red, 2 points): ~47.3 then ~45.7 Gbps — brief, consistent.
+  Ramp_1 (blue): Opens at ~47.8 Gbps, holds flat for first ~3 windows, then crashes to
+    ~29.6 Gbps, partial recovery to ~35.3 Gbps, then drops further to ~24.7 Gbps. This
+    is the throughput dip visible at lower granularity in the per-second plot.
+  Ramp_2 (green): Immediately stable at ~48–49.7 Gbps for all windows.
+  Ramp_3 (purple): ~47–48 Gbps flat, then a sharp terminal drop to ~10 Gbps in the last
+    window (final drain as requests complete).
+
+Top-right — Latency Distribution (histogram): Right-skewed. Dominant peak ≈0–3,000 ms
+  (~14,000 count). Rapid decay with a long tail extending to ~57,000 ms. Most requests
+  cluster in 0–10,000 ms; sparse but visible outliers above 20,000 ms.
+
+Middle-left — Throughput vs Concurrency: Inverted-U shape.
+  192 → 41.1 Gbps, 384 → 46.1 Gbps (peak), 576 → 37.3 Gbps.
+  The 192 value is deflated by the ramp_1 dips; the true burst level at 192 is ~47–48 Gbps.
+
+Middle-right — Request Success Rate: Single tall green bar at HTTP 200; 36,072 / 36,072.
+  No failure bar visible.
+
+Bottom-left — Latency Percentiles (bar chart): P50≈3,498 ms, P90≈~7,800 ms, P95≈10,837
+  ms, P99≈20,549 ms. Step pattern shows heavy 95th-to-99th percentile growth.
+
+Bottom-right — Throughput by Phase (bar chart): warmup≈47, ramp_1≈40, ramp_2≈48,
+  ramp_3≈47 Gbps. Ramp_1 visibly the lowest bar; ramp_2 the highest.
+
+--- throughput_timeline.png ---
+Title: "Throughput Timeline by Phase (30s windows, prorated)"
+Y-axis: 10–50 Gbps. Time axis spans ~07:57 to ~08:07.
+
+Warmup (red): 2 brief points at ~47.3 / ~45.7 Gbps, immediately transitions to ramp_1.
+
+Ramp_1 (blue): Starts flat at ~47.8 Gbps for 3–4 windows, then drops sharply to ~29.6,
+  partial recovery to ~35.3, then falls further to ~24.7 Gbps at the tail. This V-shaped
+  depression is a transient phenomenon — the phase average of 40.03 Gbps reflects these
+  depressed windows. (See per-second plot for fine-grained view.)
+
+Ramp_2 (green): Immediately flat at ~48.3–49.7 Gbps, very steady throughout. No dip.
+
+Ramp_3 (purple): ~47–48 Gbps with slight noise, then sharp terminal drop to ~10 Gbps
+  in the last 30s window (phase ending — final partial window with few active requests).
+
+--- per_second_throughput_timeline.png ---
+Title: "Per-Second Throughput Timeline by Phase"
+Y-axis: 0–65+ Gbps. Same time axis, 1-second resolution.
+
+Warmup (red): Initial spike to ~58 Gbps on first second, then oscillates ~44–51 Gbps
+  with moderate ±5 Gbps noise throughout ~73 seconds.
+
+Ramp_1 (blue): Opens at ~47–50 Gbps band. After ~2 minutes of stable operation, two
+  severe and distinct throughput collapses occur:
+  - First dip: falls from ~47 Gbps down to ~10 Gbps over ~20 seconds, stays low
+    for ~20–30 seconds, partial recovery to ~20–22 Gbps.
+  - Second dip: drops again to ~10 Gbps, stays low ~20 seconds, then recovers to
+    ~48 Gbps as ramp_1 ends.
+  Each dip has a V-shape in the 1s data. Total depressed period spans ~90–120 seconds,
+  explaining why the 207.7s ramp_1 phase average is only 40.03 Gbps despite a ~48 Gbps
+  baseline. These dips correspond to the extreme latency plumes visible in the scatter
+  (requests during those windows had latencies of 25,000–45,000+ ms).
+
+Ramp_2 (green): Immediately stable at ~43–65 Gbps band. Frequent short oscillations
+  ±5–10 Gbps; occasional brief spikes to ~60–65 Gbps. No sustained dips.
+
+Ramp_3 (purple): Similar to ramp_2 — ~42–53 Gbps band with similar oscillation pattern.
+  Final seconds drain to near 0 as the phase ends.
+
+--- throughput_vs_concurrency.png ---
+Title: "Throughput vs Concurrency Analysis" (4 sub-plots)
+
+Top-left — Throughput (Gbps) vs Concurrency:
+  Inverted-U peaking at 384:
+    192 → 41.1 Gbps
+    384 → 46.1 Gbps  ← peak
+    576 → 37.3 Gbps
+  Note: the 192 point is artificially depressed by the ramp_1 dips. Peak-period
+  throughput at 192 is ~47–48 Gbps, nearly equal to 384. The true optimal range
+  may be 192–384 rather than clearly 384 being best.
+
+Top-right — Request Rate (req/s) vs Concurrency:
+  Same inverted-U:
+    192 → 49.2 req/s
+    384 → 55.0 req/s  ← peak
+    576 → 44.4 req/s
+  Mirrors throughput profile since object size is roughly uniform (~97.6 MB).
+
+Bottom-left — Average Latency vs Concurrency (with ±1σ band):
+  Monotonically increasing:
+    192 → 2,504.3 ms   (narrow ±1σ band ≈ ±1,500 ms)
+    384 → 4,406.0 ms   (wider band ≈ ±2,500 ms)
+    576 → 7,229.3 ms   (wide band ≈ 0–11,000 ms)
+  Linear-looking increase. Regression line drawn but slightly sub-linear visually.
+
+Bottom-right — Efficiency (Gbps/connection) vs Concurrency:
+  Steep monotonic decline:
+    192 → 0.214 Gbps/conn  ← most efficient
+    384 → 0.120 Gbps/conn
+    576 → 0.065 Gbps/conn  ← least efficient
+  Near-halving per doubling of concurrency. Diminishing returns are strong.
+
+--- latency_histogram.png ---
+Title: "Comprehensive Latency Analysis" (4 sub-plots)
+
+Top-left — Overall Distribution (linear scale):
+  Dominant peak at 0–3,000 ms (~8,100 count). Rapid right-skewed decay.
+  Counts at each 2,000 ms bin (approx): 0–2k:8100, 2k–4k:5300, 4k–6k:4000,
+  6k–8k:3300, 8k–10k:2400, 10k–12k:1500, 12k–16k:~1100. Long tail to 57,531 ms.
+
+Top-right — Log-Scale Distribution:
+  Smooth log-linear decay from peak ~8,000 count at 0–3 k ms down to ~10–1
+  in the 50,000–57,000 ms range. A slight gap then cluster of ~3–4 points
+  visible around 50,000–55,000 ms. Confirms heavy but continuous outlier tail.
+
+Bottom-left — CDF: Box shows Total Requests=36,072, Mean=4,613.6 ms, P50=3,498.1,
+  P95=10,837.2, P99=20,548.9, Std=3,976.5 ms. CDF rises steeply to ~0.80 by 10,000 ms,
+  then gradually to 1.0 at 57,531 ms.
+
+Bottom-right — By Concurrency (overlapping bars):
+  Red (192): narrow peak ~0–3,000 ms, ~11,000 peak count. Tight distribution.
+  Blue (384): broader, peak ~2,500–5,000 ms, ~5,800 count. Visibly shifted right.
+  Green (576): broadest, peak ~5,000–9,000 ms, ~5,000 count. Furthest right.
+  All three groups have roughly equal sample counts (~11,000–13,000), making
+  distributional shapes directly comparable. Each group's peak shifts rightward
+  and broadens with concurrency.
+
+--- latency_boxplot.png ---
+Title: "Latency Distribution by Concurrency Level"
+Y-axis: 0–60,000 ms.
+
+Concurrency 192 (teal, 13,320 requests):
+  Min≈919 ms, Q1≈1,000 ms, Median≈1,978 ms, Q3≈3,000 ms, upper whisker≈5,000 ms.
+  Dense outlier cloud from ~6,000–45,753 ms. Compact IQR (~2,000 ms). Lowest box.
+
+Concurrency 384 (yellow, 11,128 requests):
+  Min≈1,005 ms, Q1≈2,500 ms, Median≈3,607 ms, Q3≈5,000 ms, whisker≈8,700 ms.
+  Outlier cloud to 53,617 ms. IQR ~2,500 ms. Box is ~2× higher than 192.
+
+Concurrency 576 (grey-blue, 11,624 requests):
+  Min≈1,282 ms, Q1≈5,000 ms, Median≈6,428 ms, Q3≈7,500 ms, whisker≈13,500 ms.
+  Dense outlier cloud to 57,531 ms (dataset maximum). Widest IQR (~2,500 ms).
+  Box body sits entirely above 192's whisker end.
+
+Outlier density increases with concurrency; all three groups have heavy upper tails.
+
+--- latency_violin_plot.png ---
+Title: "Latency Distribution by Concurrency Level (Violin Plot)"
+Inset: 3 levels, 36,072 requests, mean 4,613.6 ms.
+
+Concurrency 192 (green violin):
+  Narrow, compact body. Dense mass ≈919–5,000 ms; visible bulge at ~1,500–2,500 ms.
+  Thin upper whisker extending to ~45,753 ms. Smallest overall shape.
+
+Concurrency 384 (orange violin):
+  Teardrop shape, wider than 192. Body ≈1,000–10,000 ms; mass concentrated
+  at ~2,500–5,000 ms. Upper whisker to ~53,617 ms. Notably broader.
+
+Concurrency 576 (blue violin):
+  Widest diamond/bell shape. Body ≈1,282–14,000 ms; dense core at ~5,000–9,000 ms.
+  Upper whisker to ~57,531 ms. Core is fully above 384's core, showing clear upward
+  shift of the entire distribution.
+
+--- latency_scatter.png ---
+Title: "Latency vs Concurrency"
+Trend line: y=12.3x+18.5 (R² not shown, but moderate fit given heavy outliers)
+
+Three vertical columns of points at x=192, x=384, x=576.
+  Concurrency 192: Dense main stripe ≈919–5,000 ms; heavy outlier cloud to 45,753 ms.
+  Concurrency 384: Dense main stripe ≈1,005–8,700 ms; heavy outlier cloud to 53,617 ms.
+  Concurrency 576: Dense main stripe ≈1,282–13,500 ms; heavy outlier cloud to 57,531 ms.
+
+Trend line slope of 12.3 ms/connection is moderate — comparable to c6in-32xlarge-3
+(slope 1.7 per connection at 768–2304 range) but measures different scales.
+All three columns have similarly dense outlier populations; no column is outlier-free.
+
+--- latency_over_time.png ---
+Title: "Latency Analysis Over Time" (2 sub-plots)
+
+Top — Scatter (colored by concurrency, ~192=purple, ~384=teal, ~576=yellow):
+  Warmup+Ramp_1 (purple, left segment ~07:57–08:01):
+    Majority of points scatter ≈1,000–8,000 ms. Two distinct "plume" events around
+    08:00 where points spike to 25,000–45,000 ms. These two plumes directly correspond
+    to the two throughput dips seen in the per-second timeline — concurrent connections
+    that stalled, resulting in multi-second request times while throughput dropped.
+    These plumes are temporally narrow (~1–2 minutes combined).
+
+  Ramp_2 (teal, middle segment ~08:01–08:04):
+    Main cluster ~2,000–15,000 ms with many scattered outliers above 15,000 ms.
+    Some points reach ~54,000 ms. Elevated and more dispersed than early ramp_1.
+    No sharply distinct plume events — more continuously elevated.
+
+  Ramp_3 (yellow, right segment ~08:04–08:07):
+    Main cluster ~3,000–20,000 ms. Many outliers throughout, some reaching ~57,531 ms.
+    More dense/continuous scatter above 15,000 ms compared to ramp_2.
+
+Bottom — Rolling Average Latency (10-request window):
+  Warmup: baseline ~2,000–3,000 ms, low noise.
+  Ramp_1: stable at ~2,000–4,000 ms initially, then TWO sharp spikes to ~14,500 ms
+    and ~16,500 ms (corresponding to the two throughput-dip events), followed by
+    recovery. These spikes confirm the dips are caused by extreme-latency request batches.
+  Ramp_2: elevated baseline ~3,000–10,000 ms, frequent oscillations. No single dominant
+    spike — instead sustained variability.
+  Ramp_3: further elevated ~4,000–12,000 ms, frequent spikes to ~15,000–17,000 ms.
+    More chaotic than ramp_2 consistent with higher concurrency driving more variability.
+
+--- error_analysis.png ---
+Title: "HTTP Status Code Distribution"
+Single bar: HTTP 200, count=36,072.
+No other status codes present. 100% success, no retries, no HTTP errors.
+
+=============================================================================
+KEY FINDINGS AND INTERPRETATION
+=============================================================================
+
+1. INVERTED-U PEAKING AT 384 — WITH CAVEAT:
+   Measured throughput: 192→41.1, 384→46.1 (peak), 576→37.3 Gbps.
+   However, the 192 point is substantially deflated by the two severe throughput dips
+   within ramp_1. Peak-period throughput at 192 concurrency is ~47–48 Gbps, nearly
+   equal to ramp_2's 48.00 Gbps. The true optimal concurrency window is likely 192–384;
+   the apparent inverted-U peak at 384 is partly an artifact of ramp_1 instability.
+
+2. SEVERE RAMP_1 THROUGHPUT DIPS:
+   Two distinct throughput collapses occurred during ramp_1 (192 concurrency), each
+   dropping from ~48 Gbps to ~10 Gbps and lasting ~20–30 seconds, totaling ~90–120
+   seconds of severely depressed throughput within the 207.7-second phase. Corresponding
+   latency plumes (25,000–45,000 ms) are visible in the scatter/rolling-average plots.
+   Cause is unclear — possibly momentary TCP/connection stalls, R2-side throttling, or
+   a burst of slow-server responses clogging all 192 pipelines simultaneously.
+   Ramp_2 and ramp_3 do not exhibit similar structured dips (they have noise but no
+   step-change collapses), making this a ramp_1-specific anomaly.
+
+3. RTT ESCALATION WITH CONCURRENCY:
+   Phase RTT: 162.7 ms (warmup/192) → 138.8 ms (ramp_1/192) → 684.2 ms (ramp_2/384)
+   → 2,961.1 ms (ramp_3/576).
+   RTT nearly 5× between 384 and 576, and ~21× between 192 and 576. This indicates
+   significant server-side queueing or network congestion at 576 connections.
+   Contrasts with c6in-32xlarge runs 2 and 3 which showed flat RTT even at 2,304
+   connections. Suggests the hpc7g/hpc7g instance's network stack or R2 endpoint
+   begins to saturate around 384–576 connections.
+
+4. MONOTONIC LATENCY INCREASE:
+   Mean latency nearly triples from 192 (2,504 ms) to 576 (7,229 ms), scaling
+   approximately linearly with concurrency. This combined with the RTT escalation
+   indicates the system is not absorbing additional connections at 576; performance
+   degrades significantly past 384.
+
+5. LARGE OBJECT SIZE (~97.6 MB):
+   Similar to c6in-32xlarge run 1 (~97.7 MB) and r8gd-4xlarge (~97.6 MB objects).
+   Larger objects mean longer per-request TCP transfer times, which amplifies the
+   impact of latency outliers and pipeline stalls.
+
+6. EFFICIENCY PROFILE:
+   0.214 Gbps/conn at 192, dropping to 0.065 at 576. A ~3.3× efficiency loss over
+   a 3× concurrency increase. This is steeper than typical (ideal would be flat or
+   gentle decline), confirming that connections beyond 192 are increasingly wasteful.
+
+7. NAMING DISCREPANCY:
+   Folder: hpc7g-16xlarge. Parquet source: hpc7g-capacity_check_r2_20260208_000827.
+   hpc7g.16xlarge and hpc7g.16xlarge are different AWS instance types (hpc7g is
+   Graviton-based ARM; hpc7g is AMD-based). The actual instance used should be
+   verified against AWS billing/CloudWatch records.
+
+8. 100% SUCCESS RATE, NO RETRIES:
+   Despite throughput instability in ramp_1, all 36,072 requests eventually completed
+   successfully. The dips represent throughput degradation, not request failures.

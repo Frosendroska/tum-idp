@@ -2,7 +2,7 @@
 R2 Benchmark Summary Report
 ===========================
 
-Data Source: r2-results/3-attempt/hpc7a-capacity_check_r2_20260208_000827.parquet
+Data Source: r2-results/3-attempt/hpc7g-capacity_check_r2_20260208_000827.parquet
 Total Records: 36,072
 Successful Requests: 36,072
 Success Rate: 100.00%
