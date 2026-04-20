@@ -21,7 +21,7 @@ Cost modelling shows 53–77% monthly savings over S3 depending on egress volume
 - **Google Sheets:** [Google Sheets](https://docs.google.com/presentation/d/1xxCk1pUvnaJTkFJJCEnNik8FU2yyVuylQ4l7zmhHX3o/edit?usp=sharing)
 
 - **Project description:** [Google Docs](https://docs.google.com/document/d/1j7r3w-ZQyOZsmdqYzyyUJghaHzooTu6h3ejlI9FZICs/edit?tab=t.0#heading=h.uzx2xxidnmp0)
-- **Project notes:** [notes/main-notes.md](notes/main-notes.md)
+- **Project notes:** [notes/](notes/)
 
 ## Repository Structure
 
