@@ -47,6 +47,5 @@ tum-idp/
 │       └── transcript.md   # Full speaker notes
 │
 ├── notes/                  # Project notes by phase
-├── scripts/                # Utility scripts
 └── PLAN.md                 # Original project plan and timeline
 ```
