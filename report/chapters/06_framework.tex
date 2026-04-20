@@ -1,0 +1,331 @@
+%!TeX root = ../main.tex
+
+\chapter{Testing Framework Implementation}\label{chapter:framework}
+
+To answer the research questions, empirical throughput and latency data must be collected from R2 under controlled, high-concurrency conditions. This poses a non-trivial engineering challenge: Python's Global Interpreter Lock (GIL) prevents a single process from utilising multiple CPU cores simultaneously, making na\"ive concurrent implementations unable to generate the thousands of parallel HTTP connections required to saturate 100+ Gbps network interfaces. This chapter describes R2-bench, a purpose-built framework that overcomes this limitation through a three-tier concurrency hierarchy. An adaptive three-phase methodology automatically discovers the optimal concurrency configuration for each instance type, removing the need for manual tuning. Understanding the framework's design is necessary for correctly interpreting the experimental parameters and results presented in Chapter~\ref{chapter:results}.
+
+\section{Three-Phase Testing Methodology}\label{sec:phases}
+
+The framework implements a three-phase testing methodology designed to discover the optimal concurrency configuration for each instance type.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=0.8cm and 1.2cm,
+    phase/.style={rectangle, draw, rounded corners, minimum width=2.8cm, minimum height=1.8cm, align=center, font=\scriptsize},
+    decision/.style={diamond, draw, aspect=2, minimum width=2cm, minimum height=0.9cm, align=center, font=\scriptsize},
+    arrow/.style={->, thick}
+]
+
+% Phases arranged horizontally
+\node[phase, fill=blue!15] (warmup) {\textbf{Phase 1: Warm-up}\\[2pt]Initial concurrency\\for fixed duration\\to stabilize connections};
+
+\node[phase, fill=green!15, right=of warmup] (ramp) {\textbf{Phase 2: Ramp-up}\\[2pt]Incremental concurrency\\increase for\\throughput discovery};
+
+\node[decision, right=of ramp] (plateau) {Plateau\\detected?};
+
+\node[phase, fill=orange!15, right=of plateau] (steady) {\textbf{Phase 3: Steady-State}\\[2pt]Sustained measurement\\at the best concurrency};
+
+\node[rectangle, draw, right=of steady, minimum width=2.5cm, minimum height=1.2cm, align=center, font=\scriptsize] (results) {Consolidate\\Results};
+
+% Arrows
+\draw[arrow] (warmup) -- (ramp);
+\draw[arrow] (ramp) -- (plateau);
+\draw[arrow] (plateau) -- node[above, font=\tiny] {Yes} (steady);
+\draw[arrow] (plateau.south) -- ++(0,-0.6) -| node[near start, below, font=\tiny] {No: Increase concurrency} (ramp.south);
+\draw[arrow] (steady) -- (results);
+
+\end{tikzpicture}%
+}
+\caption{Three-phase testing methodology with automatic plateau detection}
+\label{fig:three-phases}
+\end{figure}
+
+\subsection{Phase 1: Warm-up}
+
+\textbf{Purpose}: Stabilize TCP connections and TLS session reuse before measurements begin.
+
+Modern HTTP implementations cache TLS handshakes to avoid expensive cryptographic negotiations on subsequent requests. The warm-up phase runs at an initial baseline concurrency for a fixed duration, ensuring all connections reach their optimized steady state. This eliminates cold-start effects that would otherwise skew early throughput measurements.
+
+\subsection{Phase 2: Ramp-up (Capacity Discovery)}
+
+\textbf{Purpose}: Identify the concurrency level at which aggregate throughput plateaus.
+
+The ramp-up phase iteratively increases load while monitoring throughput. At each step, the framework executes at the current concurrency level for a fixed duration, measures aggregate throughput across all processes, evaluates plateau conditions via three detection mechanisms (Section~\ref{sec:plateau}), and either terminates if plateau detected or increments concurrency and repeats. This adaptive algorithm prevents wasteful over-provisioning of workers that yield no throughput gains while risking system instability from resource exhaustion. We can gradually increase the load and benchmark it with different levels of concurrency, moreover, find a "sweet spot" for the specific machine, where the throughput is maxed out.
+
+\subsection{Phase 3: Steady-State}
+
+\textbf{Purpose}: Measure sustained performance under the optimal concurrency configuration identified during ramp-up.
+
+This extended phase characterizes long-term behavior, capturing tail latency distributions (p95, p99) and detecting gradual performance drift. Some storage systems exhibit degradation over time due to resource exhaustion (memory leaks, connection pool saturation, thermal throttling). The steady-state phase validates that the measured throughput remains stable under prolonged stress.
+
+\subsection{Plateau Detection Algorithm}\label{sec:plateau}
+
+The \texttt{PlateauCheck} class implements three complementary detection mechanisms to identify when throughput has reached its ceiling. Each mechanism addresses a different failure mode, ensuring robust termination.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm and 1.2cm,
+    mechanism/.style={rectangle, draw, rounded corners, minimum width=4cm, minimum height=1.2cm, align=center, font=\small, thick},
+    decision/.style={rectangle, draw, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\scriptsize, fill=white},
+    arrow/.style={->, >=stealth, thick}
+]
+
+% Input
+\node[decision, fill=gray!10] (input) {Measure\\Throughput $T_n$};
+
+% Three mechanisms in parallel
+\node[mechanism, fill=blue!15, below left=0.5cm and 1.8cm of input] (m1) {
+    \textbf{Mechanism 1}\\[2pt]
+    Bandwidth Ceiling\\[2pt]
+    $T_n \geq \alpha \cdot T_{\text{NIC}}$
+};
+
+\node[mechanism, fill=green!15, below=0.5cm of input] (m2) {
+    \textbf{Mechanism 2}\\[2pt]
+    Performance Degradation\\[2pt]
+    $\frac{T_{\text{peak}} - T_n}{T_{\text{peak}}} > \beta$
+};
+
+\node[mechanism, fill=orange!15, below right=0.5cm and 1.8cm of input] (m3) {
+    \textbf{Mechanism 3}\\[2pt]
+    Diminishing Returns\\[2pt]
+    Both last 2 steps $< \gamma$
+};
+
+% OR gate
+\node[decision, fill=yellow!20, below=0.5cm of m2] (or) {Any condition\\satisfied?};
+
+% Outcomes
+\node[decision, fill=green!30, below left=0.5cm and 1cm of or] (plateau) {\textbf{Plateau Detected}\\Stop Ramping};
+\node[decision, fill=red!20, below right=0.5cm and 1cm of or] (continue) {\textbf{Continue}\\Increase Concurrency};
+
+% Arrows
+\draw[arrow] (input) -| (m1);
+\draw[arrow] (input) -- (m2);
+\draw[arrow] (input) -| (m3);
+
+\draw[arrow] (m1) |- (or);
+\draw[arrow] (m2) -- (or);
+\draw[arrow] (m3) |- (or);
+
+\draw[arrow] (or) -- node[above left, font=\scriptsize] {Yes} (plateau);
+\draw[arrow] (or) -- node[above right, font=\scriptsize] {No} (continue);
+
+\end{tikzpicture}
+\caption{Plateau detection logic: three parallel mechanisms with OR-gate decision}
+\label{fig:plateau}
+\end{figure}
+
+\textbf{System Bandwidth Ceiling.} This mechanism triggers when $T_{\text{measured}} \geq \alpha \times T_{\text{NIC}}$, where $T_{\text{NIC}}$ is the network interface capacity and $\alpha$ is a utilization threshold. The instance's physical network interface becomes the bottleneck regardless of storage system capacity, and further concurrency increases cannot improve throughput once the NIC saturates.
+
+\textbf{Performance Degradation.} When throughput degrades such that $\frac{T_{\text{peak}} - T_{\text{current}}}{T_{\text{peak}}} > \beta$ (where $\beta$ is a degradation tolerance threshold), this mechanism detects drops from the historical peak indicating storage system throttling, client-side resource exhaustion, or network congestion. The framework reverts to the concurrency level that achieved peak throughput, avoiding unstable operating regions.
+
+\textbf{Diminishing Returns.} This mechanism requires both of the last two ramp steps to show improvement below threshold $\gamma$: $\left( \frac{T_n - T_{n-1}}{T_{n-1}} < \gamma \right) \land \left( \frac{T_{n-1} - T_{n-2}}{T_{n-2}} < \gamma \right)$, where $T_n$ is throughput at step $n$. This avoids false positives from transient fluctuations. The diminishing returns criterion is the most sensitive, triggering before physical limits are reached and finding the actual plateau typically indicating storage system limits.
+
+\section{Architecture}\label{sec:architecture}
+
+\subsection{Main Framework Architecture}\label{sec:main-architecture}
+
+To support the three-phase methodology while saturating high-bandwidth network interfaces, the framework employs a three-tier concurrency hierarchy: process-level parallelism with one OS process per CPU core to bypass Python's Global Interpreter Lock, coroutine-level concurrency with multiple asynchronous workers per process for lightweight I/O operations, and HTTP request pipelining with multiple in-flight requests per worker to hide network latency.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=1.2cm and 2cm,
+    box/.style={rectangle, draw, minimum width=3cm, minimum height=1cm, align=center},
+    smallbox/.style={rectangle, draw, minimum width=2cm, minimum height=0.7cm, align=center, font=\small},
+    process/.style={box, fill=blue!10},
+    worker/.style={smallbox, fill=green!10},
+    request/.style={smallbox, fill=orange!10, minimum width=1.3cm, minimum height=0.5cm, font=\tiny}
+]
+
+% Main orchestrator
+\node[box, fill=gray!20] (main) {Main Process\\(Orchestrator)};
+
+% Process level
+\node[process, below=0.5cm of main, xshift=-4.5cm] (p0) {Process 0\\Core 0};
+\node[process, below=0.5cm of main] (p1) {Process 1\\Core 1};
+\node[process, below=0.5cm of main, xshift=4.5cm] (pn) {Process N-1\\Core N-1};
+
+% Worker level (under Process 0)
+\node[worker, below=0.3cm of p0, xshift=-1.5cm] (w00) {Worker 0};
+\node[worker, below=0.3cm of p0, xshift=1.5cm] (w01) {Worker W};
+
+% HTTP requests (under Worker 0)
+\node[request, below=0.3cm of w00, xshift=-1cm] (r000) {Req 0};
+\node[request, below=0.3cm of w00, xshift=1cm] (r001) {Req D};
+
+% Connections
+\draw[->, thick] (main) -- (p0);
+\draw[->, thick] (main) -- (p1);
+\draw[->, thick] (main) -- (pn);
+
+\draw[->, thick] (p0) -- (w00);
+\draw[->, thick] (p0) -- (w01);
+
+\draw[->, thick] (w00) -- (r000);
+\draw[->, thick] (w00) -- (r001);
+
+% Dots for continuation
+\node at ($(p1)!0.5!(pn)$) {\huge $\cdots$};
+\node at ($(w00)!0.5!(w01)$) {$\cdots$};
+\node at ($(r000)!0.5!(r001)$) {\tiny $\cdots$};
+
+% Storage system - positioned relative to request layer for better spacing
+\node[box, fill=red!10, below=0.3cm of r000, xshift=5.5cm] (storage) {Object Storage\\(S3 / R2)};
+
+% Arrows to storage - using better paths to avoid overlap
+\draw[->, thick, dashed] (r000) to[out=-90, in=160] (storage);
+\draw[->, thick, dashed] (r001) to[out=-90, in=140] (storage);
+
+\end{tikzpicture}
+\caption{Three-tier concurrency hierarchy: processes, workers, and pipelined requests}
+\label{fig:architecture}
+\end{figure}
+
+Total system concurrency is calculated as:
+
+\begin{equation}
+C_{\text{total}} = N_{\text{cores}} \times W_{\text{per\_core}} \times D_{\text{pipeline}}
+\end{equation}
+
+where $N_{\text{cores}}$ is the number of vCPUs, $W_{\text{per\_core}}$ is the configurable workers per core, and $D_{\text{pipeline}}$ is the pipeline depth. This multiplicative scaling enables the framework to generate tens of thousands of concurrent HTTP requests, sufficient to saturate high-bandwidth network interfaces.
+
+\textbf{Process Pool Architecture.} The \texttt{ProcessPool} class spawns one child process per CPU core using Python's \texttt{multiprocessing} module, allocating each process to a dedicated core to circumvent the Global Interpreter Lock. Each process operates with fully isolated resources: it runs its own \texttt{uvloop} event loop for faster asynchronous I/O than the standard \texttt{asyncio} library, maintains an independent \texttt{aioboto3} session with its own HTTP connection pool to avoid inter-process contention, and occupies a separate address space that eliminates GIL-related synchronisation overhead.
+
+To coordinate the three-phase methodology across all processes, shared state is managed via \texttt{multiprocessing.Manager()}:
+
+\begin{itemize}
+    \item \texttt{shared\_phase\_id}: Signals phase transitions (warm-up $\to$ ramp-up $\to$ steady-state) to synchronise all processes
+    \item \texttt{shared\_workers\_per\_core}: Broadcasts dynamic concurrency adjustments during ramp-up capacity discovery
+    \item \texttt{shared\_total\_http\_requests}: Global concurrency metric stamped on each benchmark record for analysis
+\end{itemize}
+
+Processes poll these values periodically; when \texttt{shared\_workers\_per\_core} increases, each process spawns additional coroutines to scale up, and when it decreases following a detected performance degradation, workers gracefully terminate after completing their in-flight requests.
+
+\textbf{Worker Pool Architecture.} Each process maintains a \texttt{WorkerPool} that manages asynchronous coroutines. Workers execute a tight event loop, continuously issuing download requests, collecting metrics, and persisting results:
+
+\begin{verbatim}
+while phase active:
+    tasks = [download_request() for _ in range(pipeline_depth)]
+    results = await asyncio.gather(*tasks)
+    record metrics
+    flush to disk periodically
+\end{verbatim}
+
+\textbf{HTTP Request Pipelining}: Each worker maintains multiple concurrent requests via \texttt{asyncio.gather()}. While awaiting response A, the worker immediately initiates requests B, C, D, and so on. This overlapping execution hides network round-trip latency—a critical optimization for saturating high-bandwidth links where transfer time dominates latency.
+
+\textbf{Range Requests.} Rather than downloading entire objects repeatedly, the framework employs HTTP byte-range requests targeting fixed-size chunks of a single large object. Keeping the dataset to one object stays within R2's free storage tier, eliminating storage costs while simplifying implementation. Fixed chunk sizes are chosen to saturate network bandwidth while minimising the number of billable GET requests. Crucially, each request targets a randomly selected byte offset, bypassing any CDN or origin caching layer and ensuring that all measured traffic reaches R2's backend storage directly. To avoid CPU overhead during measurement, all range offsets are pre-computed into a cache at initialisation time and accessed by workers via round-robin indexing, eliminating repeated calls to the pseudorandom number generator in the hot path.
+
+
+\subsection{Data Collection Methods}\label{sec:data-collection}
+
+\textbf{Benchmark Record Structure.} Each completed request generates a \texttt{BenchmarkRecord} containing temporal, performance, and contextual metadata:
+
+\begin{itemize}
+    \item \textbf{Worker identification}: Unique worker and process identifiers for tracing individual coroutines
+    \item \textbf{Request details}: Object key, byte-range offset, and requested size
+    \item \textbf{Transfer metrics}: Actual bytes received (may differ from requested size on partial failures)
+    \item \textbf{Latency measurements}:
+    \begin{itemize}
+        \item \textit{Total latency}: Complete request duration from initiation to final byte
+        \item \textit{Round-trip time (RTT)}: Time to first byte, isolating network latency from transfer time
+    \end{itemize}
+    \item \textbf{HTTP status}: Response code for error analysis (200/206 for success, 429/503 for throttling)
+    \item \textbf{Concurrency context}: Total concurrent requests at measurement time for correlation analysis
+    \item \textbf{Phase identifier}: Links measurements to testing phase for per-phase aggregation
+    \item \textbf{Timestamps}: Request start and end times with microsecond precision
+\end{itemize}
+
+\textbf{Streaming Persistence.}
+Recording every request in RAM would exhaust host memory on long benchmarks.
+Each OS process therefore holds a bounded in-memory buffer, periodically flushed to timestamped Parquet shards; the buffer is cleared after each successful write, with extra flushes at phase boundaries so little data remains in RAM when phase statistics are computed.
+After the \emph{entire} benchmark finishes, all shards are merged into a single Parquet dataset sorted by timestamp for analysis.
+When the number of shards is large, merging proceeds in fixed-size batches (batch files $\rightarrow$ intermediate files $\rightarrow$ final file), keeping peak memory bounded; temporary batch outputs are deleted afterward.
+
+\textbf{Concurrent persistence.}
+Within each process, completed records are appended to a shared list by async workers.
+The generic persistence layer uses a \texttt{threading.Lock()} where multiple threads may append to the same in-memory buffer; Parquet writes occur at explicit flush points so measurement and I/O are structured around the same lifecycle.
+
+\subsection{Visualization Pipeline}\label{sec:visualization}
+
+The \texttt{BenchmarkVisualizer} processes consolidated Parquet datasets to generate performance reports. Two key algorithms transform raw request-level data into interpretable metrics:
+
+\textbf{Throughput calculation} uses 1-second sliding windows with byte prorating. Since individual requests span time intervals, bytes are divided proportionally based on how much of each request's duration overlaps the window:
+
+\begin{equation}
+T(t) = \frac{\sum_{i} \text{prorated\_bytes}_i \times 8}{10^9} \quad \text{(Gbps)}
+\end{equation}
+
+Timeline plots annotate phase boundaries and plateau detection events to correlate concurrency changes with throughput response.
+
+\textbf{Latency analysis} computes empirical cumulative distribution functions (CDFs) and percentile metrics (p50, p90, p95, p99, p99.9):
+
+\begin{equation}
+F(x) = P(\text{latency} \leq x) = \frac{\#\{\text{requests} \leq x\}}{N_{\text{total}}}
+\end{equation}
+
+Additional standard visualizations include throughput vs concurrency scaling curves, per-phase latency histograms and boxplots, latency scatter plots over time, rolling average latency, violin plots, and an integrated dashboard combining all metrics.
+
+\section{Optimization Considerations}\label{sec:optimization}
+
+\subsection{Concurrency Model Comparison}\label{sec:solution-comparison}
+
+Saturating high-bandwidth network interfaces requires generating tens of thousands of concurrent HTTP requests. However, Python's Global Interpreter Lock (GIL) prevents a single process from utilizing multiple CPU cores simultaneously.
+
+Different concurrency models address this limitation with distinct trade-offs:
+
+\textbf{Pure threading} cannot achieve true parallelism due to the GIL. Regardless of thread count, execution serializes through the single interpreter lock, effectively limiting throughput to single-core performance.
+
+\textbf{Pure asyncio} excels at lightweight I/O concurrency but cannot leverage multiple CPU cores. When managing tens of thousands of concurrent operations, the event loop itself becomes the bottleneck, saturating a single CPU while others remain idle.
+
+\textbf{Pure multiprocessing} solves the GIL limitation by creating independent Python processes, each with its own GIL and dedicated CPU core. Each process independently generates high request concurrency, and the combined load saturates the network interface. However, inter-process communication introduces coordination overhead.
+
+\textbf{Hybrid architecture} (employed in this work) synthesizes the strengths of each approach:
+
+\begin{itemize}
+    \item \textbf{Multiprocessing} for CPU-level parallelism—N independent processes across N cores
+    \item \textbf{Asyncio} within each process for lightweight I/O concurrency without thread overhead
+    \item \textbf{HTTP pipelining} to hide network latency through request overlapping
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Concurrency model comparison for storage benchmarking}
+\label{tab:concurrency-comparison}
+\begin{tabular}{p{3cm}p{3cm}p{4cm}p{4cm}}
+\hline
+\textbf{Approach} & \textbf{True Parallelism} & \textbf{Primary Limitation} & \textbf{Throughput} \\
+\hline
+Single-threaded & No & Sequential exec & Very low (GIL-bound) \\
+Multi-threaded & No (GIL) & Thread contention & Low (GIL serialization) \\
+Asyncio only & No (single core) & Event loop CPU & Moderate (1-core ceiling) \\
+Multiprocessing & Yes & IPC overhead & Good (coord-limited) \\
+\textbf{Hybrid (this work)} & Yes & Minimal & \textbf{Excellent (near NIC-rate)} \\
+\hline
+\end{tabular}
+\end{table}
+
+This design maximizes throughput while minimizing coordination overhead. Processes operate autonomously except during infrequent phase transitions, reducing inter-process communication to negligible levels. The result is effective multi-core scaling with diminishing returns at high core counts, enabling the framework to approach network interface capacity limits in practice.
+
+\subsection{Throughput Maximization Techniques}\label{sec:throughput-max}
+
+\textbf{Connection pool sizing}: The \texttt{aiohttp} library defaults to 100 maximum connections. With hundreds of concurrent workers, this causes blocking as workers wait for available connections. The framework calculates required capacity ($\text{workers} \times \text{pipeline\_depth} \times \text{safety\_factor}$) and patches \texttt{aiohttp} at initialization to use this higher limit.
+
+\textbf{Cached IPC reads}: Each process caches the global concurrency value locally instead of reading from shared memory on every request. This eliminates tens of thousands of inter-process communication calls per second, updating the cache only during phase transitions when concurrency changes.
+
+\textbf{SSL verification}: Disabled for synthetic benchmarks to eliminate CPU overhead from TLS certificate verification, allowing CPU resources to focus on request generation. Appropriate only for non-sensitive test data when maximizing throughput is the objective.
+
+\textbf{Streaming response processing}: Response payloads are streamed and immediately discarded after measurement, keeping memory usage bounded regardless of concurrency level. Without streaming, thousands of concurrent requests would require excessive RAM.
+
+\textbf{Request timeouts}: Without explicit timeouts, requests to overloaded storage systems hang indefinitely, freezing the benchmark. The framework configures request timeouts—long enough to accommodate transfers and storage system queueing during throttling, yet short enough to detect genuine failures and retry.
+
+\section{Summary}
+
+The R2-bench framework combines multiprocessing for CPU parallelism, asyncio for I/O concurrency, and HTTP pipelining to saturate high-bandwidth network interfaces while bypassing Python's GIL limitations. The three-phase methodology—warm-up for stabilization, ramp-up with adaptive plateau detection, and steady-state for sustained measurement—automatically discovers optimal concurrency without manual tuning. Streaming persistence with hierarchical consolidation enables collecting millions of records without memory exhaustion, while prorated throughput calculations and latency CDFs provide accurate performance metrics.
+
+This architecture enables reliable characterisation of R2 performance across diverse EC2 instance types and network configurations, with results presented in Chapter~\ref{chapter:results}.

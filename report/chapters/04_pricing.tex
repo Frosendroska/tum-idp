@@ -1,0 +1,138 @@
+%!TeX root = ../main.tex
+
+\chapter{Pricing Models}\label{chapter:pricing}
+
+Before evaluating whether R2 justifies a migration, the pricing structures of both services must be understood in full. This chapter presents the complete pricing models for Amazon S3 and Cloudflare R2 and compares them across storage, operations, and egress dimensions to identify precisely where cost differences arise and what drives them.
+
+\section{Amazon S3 Pricing}\label{sec:s3-pricing}
+
+Amazon S3 employs a multi-dimensional pricing model based on storage class, operations, and data transfer~\cite{aws-s3-pricing}.
+
+\subsubsection{Storage Pricing} 
+S3 offers 11 storage classes optimized for different access patterns. Table~\ref{tab:s3-storage-pricing} summarizes pricing for the most common classes.
+
+\begin{table}[H]
+\centering
+\caption{Amazon S3 storage pricing (eu-north-1 region, April 2025)}
+\label{tab:s3-storage-pricing}
+\begin{tabular}{p{5.5cm}p{5cm}p{4cm}}
+\hline
+\textbf{Storage Class} & \textbf{Tier / Description} & \textbf{Price} \\
+\hline
+S3 Standard & First 50 TB / Month & \$0.023 per GB \\
+ & Next 450 TB / Month & \$0.022 per GB \\
+ & Over 500 TB / Month & \$0.021 per GB \\
+\hline
+S3 Standard-IA & All Storage / Month & \$0.0125 per GB \\
+\hline
+S3 Glacier Instant Retrieval & All Storage / Month & \$0.004 per GB \\
+\hline
+S3 Glacier Flexible Retrieval & All Storage / Month & \$0.0036 per GB \\
+\hline
+S3 Glacier Deep Archive & All Storage / Month & \$0.00099 per GB \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Operations Pricing} 
+S3 charges for API operations. Table~\ref{tab:s3-operations-pricing} shows costs for S3 Standard.
+
+\begin{table}[H]
+\centering
+\caption{Amazon S3 operations pricing (S3 Standard, April 2025)}
+\label{tab:s3-operations-pricing}
+\begin{tabular}{p{5cm}p{4.5cm}p{4.5cm}}
+\hline
+\textbf{Operation Type} & \textbf{Per 1,000 Requests} & \textbf{Notes} \\
+\hline
+PUT, COPY, POST, LIST & \$0.005 & Write operations \\
+GET, SELECT, Other & \$0.0004 & Read operations \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Data Transfer Pricing} 
+Egress refers to outbound data transfer from S3 to the public internet, another cloud provider, or external infrastructure. Egress pricing is tiered:
+
+\begin{itemize}
+    \item First 10 TB / Month: \$0.09 per GB
+    \item Next 40 TB / Month: \$0.085 per GB
+    \item Next 100 TB / Month: \$0.07 per GB
+    \item Greater than 150 TB / Month: \$0.05 per GB
+\end{itemize}
+
+Data transfers within the same AWS region (e.g., S3 to EC2 in eu-north-1) are free. Data transferred from S3 to AWS services in different regions incurs charges ranging from \$0.01 to \$0.08 per GB. The first 100 GB of outbound data per month across all AWS services is free.
+
+\section{Cloudflare R2 Pricing}\label{sec:r2-pricing}
+
+Cloudflare R2 employs a simplified pricing model with two storage tiers and eliminates egress fees entirely~\cite{cloudflare-r2-pricing}.
+
+\subsubsection{Storage Pricing}
+R2 offers a generous free tier: 10 GB storage per month at no charge.
+
+\begin{table}[H]
+\centering
+\caption{Cloudflare R2 storage pricing (April 2025)}
+\label{tab:r2-storage-pricing}
+\begin{tabular}{p{5cm}p{5.5cm}p{4cm}}
+\hline
+\textbf{Storage Class} & \textbf{Description} & \textbf{Price} \\
+\hline
+Standard Storage & General-purpose object storage & \$0.015 per GB \\
+Infrequent Access & Data accessed less frequently & \$0.010 per GB \\
+\hline
+\end{tabular}
+\end{table}
+
+
+\subsubsection{Operations Pricing}
+R2's free tier includes 1 million Class A operations per month and 10 million Class B operations per month.
+
+\begin{table}[H]
+\centering
+\caption{Cloudflare R2 operations pricing (April 2025)}
+\label{tab:r2-operations-pricing}
+\begin{tabular}{p{3.5cm}p{3cm}p{3.5cm}p{4cm}}
+\hline
+\textbf{Operation Type} & \textbf{Standard} & \textbf{Infrequent Access} & \textbf{Notes} \\
+\hline
+Class A Operations & \$4.50 / million & \$9.0 / million & PUT, POST, DELETE \\
+Class B Operations & \$0.36 / million & \$0.9 / million & GET, LIST \\
+Data Retrieval & None & \$0.01 / GB & Retrieval from IA \\
+\hline
+\end{tabular}
+\end{table}
+
+
+\subsubsection{Data Transfer Pricing}
+R2 does not charge for outbound data transfer to the internet. This eliminates the primary cost driver for high-bandwidth workloads. Data transferred within Cloudflare's network (to Workers, CDN, Pages) is also free. Ingress (uploading data into R2) is free.
+
+\section{Pricing Comparison}\label{sec:pricing-comparison}
+
+\begin{table}[H]
+\centering
+\caption{Amazon S3 vs Cloudflare R2 pricing comparison (April 2025)}
+\label{tab:s3-r2-pricing-comparison}
+\begin{tabular}{p{4.5cm}p{5cm}p{5cm}}
+\hline
+\textbf{Aspect} & \textbf{Amazon S3} & \textbf{Cloudflare R2} \\
+\hline
+Storage (Standard) & \$0.023 per GB/month & \$0.015 per GB/month \\
+Storage (Infrequent Access) & \$0.0125 per GB/month & \$0.010 per GB/month \\
+PUT / POST / DELETE & \$0.005 per 1k requests & \$0.0045 per 1k requests \\
+GET / LIST & \$0.0004 per 1k requests & \$0.00036 per 1k requests \\
+Egress to Internet & \$0.09/GB (first 10 TB) & \$0 (free) \\
+Free Tier & 5 GB + 20k GET + 2k PUT & 10 GB + 10M Class B + 1M Class A \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection{Key Observations}
+
+R2's standard storage at \$0.015/GB is 35\% cheaper than S3 Standard at \$0.023/GB, and operation costs are broadly comparable, with R2 marginally lower in each category. For most workloads, however, these differences are secondary to egress. S3's egress pricing starts at \$0.09/GB---4$\times$ its per-GB storage cost---meaning that for a workload serving 10~TB/month, egress alone (\$900) dwarfs storage costs (\$230 for S3, \$150 for R2). R2 eliminates this cost entirely, making egress the single most important differentiator in any cost comparison.
+
+R2's free tier is also substantially more generous: 10~GB storage and 10M Class~B operations per month, compared to S3's 5~GB and 20,000 GET requests. This makes R2 more accessible for development, testing, and small-scale production workloads.
+
+\subsection{Cost Implications}
+
+The economic case for R2 strengthens as egress bandwidth increases. For workloads with high read-to-write ratios serving public content (e.g., media delivery, ML model distribution, data interchange), R2's zero-egress model can reduce costs by 53--77\% compared to S3, depending on the egress-to-storage ratio (see Section~\ref{sec:cost-performance}). Cloudflare publishes a durability SLO of 99.999999999\% (eleven 9s)---comparable to S3---and a 99.9\% availability SLA~\cite{cloudflare-r2-durability}. The remaining evaluation question is therefore performance: whether R2 can match S3 at high bandwidth and concurrency, which is the subject of Chapter~\ref{chapter:results}.

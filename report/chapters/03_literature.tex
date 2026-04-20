@@ -1,0 +1,236 @@
+%!TeX root = ../main.tex
+
+\chapter{Literature Overview}\label{chapter:literature}
+
+This chapter establishes the technical and market context needed to interpret the experimental results in Chapter~\ref{chapter:results}. It covers the fundamentals of object storage, surveys the competitive landscape, and profiles both Amazon S3 and Cloudflare R2 in sufficient depth to clarify the architectural differences most relevant to performance and cost.
+
+\section{Block, File, and Object Storage}\label{sec:storage-types}
+
+Cloud storage systems fall into three categories, each optimized for different access patterns~\cite{aws-storage-comparison}.
+
+\textbf{Block Storage} provides raw storage volumes split into fixed-size blocks. A file system layer is required to manage data. Block storage delivers fast, low-latency access ideal for databases and virtual machines. Examples include AWS EBS, Azure Managed Disks, Google Persistent Disk, and local SSDs. Scalability is limited without additional abstraction layers.
+
+\textbf{File Storage} exposes hierarchical file and folder structures accessed via standard protocols (NFS, SMB). It supports permissions and shared access, making it suitable for traditional applications needing file paths. Examples include AWS EFS, Azure Files, and Google Filestore.
+
+\textbf{Object Storage} stores data as objects with rich metadata and unique IDs. Access occurs via HTTP APIs. Object storage scales horizontally to unlimited capacity, making it ideal for unstructured data such as images, videos, logs, and backups. Objects are immutable—modifications require complete rewrites. Examples include AWS S3, Azure Blob Storage, Cloudflare R2, and Google Cloud Storage. Table~\ref{tab:storage-comparison} compares these paradigms.
+
+
+\begin{table}[H]
+\centering
+\caption{Comparison of storage paradigms}
+\label{tab:storage-comparison}
+\begin{tabular}{p{3.5cm}p{3.5cm}p{3.5cm}p{3.5cm}}
+\hline
+\textbf{Feature}         & \textbf{Block}            & \textbf{File}             & \textbf{Object}           \\
+\hline
+File management          & Needs file system         & File-level protocols      & API-based access          \\
+Metadata                 & Very little               & Limited file attributes   & Unlimited, custom fields  \\
+Performance              & High, low latency         & High for shared access    & Stores unlimited data     \\
+Scalability              & Somewhat limited          & Somewhat limited          & Unlimited scale           \\
+Use case                 & Databases, VMs            & Shared folders            & Unstructured data         \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Object Storage Fundamentals}\label{sec:fundamentals}
+
+\textbf{Buckets} are containers that hold objects, similar to folders but without hierarchy. They enable organization by project, user, or application. Access permissions, region settings, and versioning policies apply at the bucket level.
+
+\textbf{Objects} consist of the binary payload (data such as images, videos, or Parquet files), a unique identifier (hash, UUID, or key), and metadata (system-defined or custom tags, timestamps, content type).
+
+\textbf{Metadata} consists of system metadata (automatically managed: size, creation time, MIME type) and user-defined metadata (custom key-value pairs for labels, tags, ownership). Metadata supports indexing, searching, enforcing access policies, and automating workflows.
+
+\textbf{Versioning} allows multiple historical versions of the same object to coexist. When enabled, updates create new versions instead of overwriting. This supports recovery from accidental deletions, time-based audits, and long-term data preservation. 
+
+\textbf{Durability} measures the likelihood that data remains intact and uncorrupted over time, expressed as "nines" (e.g., 99.999999999\%). High durability is achieved by replicating objects across multiple storage nodes, data centers, or geographic regions. This protects against data loss from disk failures, power outages, or natural disasters.
+
+\textbf{Availability} refers to how often data can be accessed when needed, also expressed as a percentage (e.g., 99.99\%). It reflects the system's ability to serve read and write operations without downtime. Techniques such as automatic failover, load balancing, and geographically redundant systems help achieve high availability.
+
+Both metrics are contractual commitments backed by Service Level Agreements (SLAs). If providers fail to meet guarantees, customers may receive compensation such as service credits.
+
+\subsection{Consistency Models}
+
+Consistency defines the visibility and predictability of data operations in distributed systems.
+
+\textbf{Eventual Consistency} means updates become visible after some delay. Different readers may temporarily observe different versions of the same object.
+
+\textbf{Monotonic Reads Consistency} guarantees that once a client reads a particular version, it never observes an older version in subsequent reads. It does not guarantee that the latest version is immediately visible.
+
+\textbf{Read-After-Write Consistency} ensures that after a client performs a write, that same client always sees the updated value in subsequent reads. Other clients may still see stale data.
+
+\textbf{Causal Consistency} guarantees that operations which are causally related are observed by all clients in the correct causal order.
+
+\textbf{Strong Consistency} guarantees that once an update is acknowledged, any subsequent read immediately reflects that change. According to the CAP theorem, achieving strong consistency under network partitions requires sacrificing either availability or partition tolerance.
+
+\section{Real-World Use Cases}\label{sec:use-cases}
+
+Object storage plays a foundational role in modern data infrastructure~\cite{cloudian-use-cases,google-cloud-object-storage,layerstack-object-storage}.
+
+\textbf{Data Lake Storage.} Object storage serves as the backbone of centralised data lakes, holding structured, semi-structured, and unstructured data at any scale in formats such as JSON, CSV, and Parquet. Data is stored in raw form and structured at query time (schema-on-read), with object storage's unlimited scalability, cost efficiency, and durability making it the natural fit.
+
+\textbf{ETL/ELT Pipelines.} Object storage acts as a staging or intermediate layer between source systems and target data warehouses. Raw data is ingested into object storage first, then transformed and loaded using batch or stream processing tools.
+
+\textbf{Data Sharing and Interchange.} Organisations use object storage to share datasets between internal teams or across organisational boundaries via HTTP(S), with fine-grained access controls and pre-signed URLs enabling secure, time-limited access without exposing credentials.
+
+\textbf{Machine Learning and Analytics.} ML engineers store training datasets, model artefacts, checkpoints, and experiment logs in object storage. Analytics engines such as Presto, Athena, Databricks, and BigQuery operate directly on data in place, without requiring it to be moved into a database first.
+
+\textbf{Static Assets and CDN Origins.} Modern web applications serve static content---HTML, CSS, JavaScript, images, and video---from object storage, which functions as the origin for CDNs such as Cloudflare or AWS CloudFront. Content is cached and delivered from edge locations close to end users.
+
+\textbf{Backups, Snapshots, and Archival.} Object storage is well-suited to backup and archival workloads due to its durability, low cost, and support for immutability. Lifecycle policies automatically transition objects to cheaper storage tiers (infrequent access, cold storage, deep archive) as they age.
+
+\section{Market Landscape}\label{sec:market}
+
+\subsubsection{Hyperscale Providers}
+
+Hyperscale providers operate globally distributed data centers with vast compute and storage resources, offering comprehensive cloud services designed to support massive workloads and high availability~\cite{bmc-cloud-comparison}. Table~\ref{tab:hyperscale-comparison} summarises the three dominant players.
+
+\begin{table}[H]
+\centering
+\caption{Hyperscale object storage providers}
+\label{tab:hyperscale-comparison}
+\footnotesize
+\begin{tabular}{p{2.6cm}p{1.3cm}p{2.1cm}p{1.2cm}p{1.1cm}p{5.1cm}}
+\hline
+\textbf{Provider} & \textbf{Market share\textsuperscript{a}} & \textbf{Service} & \textbf{Regions} & \textbf{AZs} & \textbf{Key differentiator} \\
+\hline
+Amazon AWS      & 28\% & S3            & $\sim$40   & $\sim$125 & De facto API standard; deepest ecosystem (Lambda, Athena, CloudFront) \\
+Microsoft Azure & 21\% & Blob Storage  & $\sim$80 & $\sim$150 & Hot/cool/archive tiers; Azure Data Lake and Synapse integration \\
+Google Cloud    & 14\% & Cloud Storage & $\sim$40  & $\sim$130 & S3-compatible API; native BigQuery and Vertex AI integration \\
+\hline
+\multicolumn{6}{l}{\textsuperscript{a} Cloud infrastructure market share~\cite{statista-cloud-market-share}} \\
+\end{tabular}
+\end{table}
+
+\subsubsection{Independent and Regional Clouds}
+
+Independent and regional providers operate at smaller scale or within specific geographic regions, focusing on competitive pricing, localized compliance, and tailored support.
+
+\begin{itemize}
+    \item \textbf{Cloudflare R2}: S3-compatible with zero egress fees, optimized for CDN-origin use cases
+    \item \textbf{Backblaze B2}: Cost-effective S3-compatible storage for backups and archives
+    \item \textbf{Wasabi}: Flat pricing with no egress or API fees, S3-compatible.
+    \item \textbf{Hetzner}: EU-based, affordable, S3-compatible with GDPR compliance
+    \item \textbf{DigitalOcean Spaces}: Simple S3-compatible storage for web apps
+    \item \textbf{Scaleway}: French provider, S3-compatible with lifecycle rules
+\end{itemize}
+
+\subsubsection{Open-Source and Self-Hosted Solutions}
+
+Open-source platforms enable organizations to deploy S3-compatible storage on their own infrastructure, providing full control over data, customization, and compliance.
+
+\begin{itemize}
+    \item \textbf{MinIO}: Lightweight open-source storage for private deployments
+    \item \textbf{Ceph}: Scalable open-source storage supporting object, file, and block interfaces via RADOS Gateway (RGW)
+    \item \textbf{OpenIO}: Flexible open-source storage, acquired by OVH
+    \item \textbf{SeaweedFS}: Efficient file + object hybrid storage, lightweight and fast
+\end{itemize}
+
+\section{Amazon S3: Architecture and Features}\label{sec:s3}
+
+Amazon S3 pioneered cloud object storage in 2006 and remains the industry standard.
+
+\subsection{Architecture Overview}
+
+\textbf{Storage Model}: Data is stored as objects inside buckets. Each object includes the data itself (binary blob), metadata (system and user-defined), and a unique key (object name).
+
+\textbf{Physical Storage}: Objects are automatically replicated across multiple Availability Zones (AZs) within a region. This replication ensures 11-nines (99.999999999\%) durability. Storage hardware is abstracted—users never deal directly with disks or servers.
+
+\textbf{Namespace and Structure}: S3 uses a flat namespace. "Folders" are simulated using object key prefixes (e.g., \texttt{photos/2026/02/image.jpg}). There is no real hierarchy like in traditional file systems.
+
+\subsection{Feature Highlights}
+
+\textbf{Access Layer (API)}: Users access objects via the S3 REST API or AWS SDKs. Supported operations include GET, PUT, DELETE, LIST, and COPY. APIs are designed for high concurrency and strong consistency (available after the December 2020 update).
+
+\textbf{Service Integration}: S3 integrates natively with many AWS services: CloudFront (CDN delivery), Lambda (serverless processing), Athena (SQL over S3), Redshift Spectrum (external tables), and EventBridge/SNS (event-driven actions).
+
+\textbf{Security}: Supports bucket policies, IAM roles/policies, access control lists (ACLs), and object ownership settings. Encryption options include Server-Side Encryption with S3 Managed Keys (SSE-S3), Server-Side Encryption with KMS Managed Keys (SSE-KMS), and Client-Side Encryption.
+
+\textbf{Performance Features}: Multi-part upload for large objects, byte-range retrieval for partial downloads, Transfer Acceleration for faster uploads via CloudFront edge locations, and Intelligent-Tiering to automatically move data to cheaper storage classes.
+
+\subsection{Reference Use Cases}
+
+Major platforms rely on S3 as their storage backbone:
+
+\begin{itemize}
+    \item \textbf{Snowflake}: Stores all data in S3. Virtual warehouses pull data from S3 into compute/cache tiers, scaling compute independently of storage~\cite{dageville2016snowflake}.
+
+    \item \textbf{Databricks}: Uses S3 as the default data lake backend for Delta Lake tables. Spark clusters pull data from S3, transform, and write back~\cite{databricks-multicloud}.
+
+    \item \textbf{Netflix}: Employs a microservices architecture on AWS with S3 serving as central storage for media assets, logs, and analytics data~\cite{aws-netflix-case}.
+
+    \item \textbf{Airbnb}: Data infrastructure leverages S3 as the primary data lake, storing logs, images, and analytical data~\cite{aws-airbnb-case}.
+
+    \item \textbf{Pinterest}: Platform relies on S3 to store user-generated content such as images and videos~\cite{aws-pinterest-case}.
+
+    \item \textbf{Salesforce}: Utilizes S3 to store backups, logs, and static assets across various services in its Hyperforce architecture~\cite{aws-salesforce-case}.
+\end{itemize}
+
+\section{Cloudflare R2: Architecture and Features}\label{sec:r2}
+
+\subsection{Why R2 is a Disruptive Alternative}
+
+R2 represents a fundamental shift in cloud storage economics~\cite{cloudflare-r2-product,yconsulting-r2-comparison}. Its most consequential departure from conventional providers is the complete elimination of egress fees, removing the primary cost barrier for high-bandwidth and data-intensive applications. Because R2 implements the S3-compatible API, existing tools, SDKs, and application code continue to work without modification, lowering the practical barrier to adoption. Cloudflare's globally distributed edge network provides low-latency data access across regions, and tight integration with Cloudflare Workers enables serverless compute to run directly against stored data. Taken together, these properties---zero egress, API compatibility, global reach, and a simplified pricing model without hidden fees---position R2 as a structurally different offering rather than a marginal cost variant of existing services.
+
+\subsection{Architecture Overview}
+
+\textbf{Storage Model}: R2 stores data as immutable objects in named buckets~\cite{cloudflare-r2-docs}. Each object is referenced by a globally unique key and can include optional metadata. Objects are accessed using an S3-compatible API. Object versioning can be enabled at the bucket level. R2 abstracts away the concept of storage regions—Cloudflare's control plane assigns object placement based on internal logic rather than user-selected regions.
+
+\textbf{Physical Storage}: R2 does not rely on Cloudflare's global edge network (300+ PoPs) for primary storage. Instead, it uses centralized storage clusters composed of server nodes within co-located data centers per logical region. Within each cluster, data is erasure-coded and distributed across storage nodes. Erasure coding provides fault tolerance while minimizing overhead compared to full replication. Facilities are interconnected with Cloudflare's backbone network for low-latency internal operations. The control plane monitors node health and rebalances data as needed.
+
+\textbf{Namespace and Structure}: R2 implements a flat namespace under each bucket. Object keys simulate folder paths but do not form a true directory tree. Buckets are globally scoped and must be uniquely named across all of Cloudflare R2. Bucket configurations include access control (public/private), versioning settings, and lifecycle rules.
+
+\textbf{Data Lifecycle and Redundancy}: When an object is uploaded, it is written to a central cluster and erasure-coded into shards. These shards are written across multiple nodes in physically separate racks within the same cluster to protect against hardware failures. Popular or recently accessed objects may be cached at Cloudflare's edge locations (PoPs) to accelerate delivery. R2 does not replicate data between multiple clusters/regions by default, but the system is designed to allow restoration from encoded shards.
+
+\subsection{Feature Highlights}
+
+\textbf{Access Layer (API)}: Provides fully S3-compatible API supporting standard operations like PUT, GET, DELETE, LIST, COPY. Integrates with Cloudflare Workers for serverless compute close to storage.
+
+\textbf{Service Integration}: Tight integration with Cloudflare Workers for in-flight data processing, Cloudflare Stream, Cloudflare Pages, and Zero Trust for secure delivery. Can serve content directly via Cloudflare CDN without egress fees.
+
+\textbf{Security}: Fine-grained bucket policies and object permissions. Supports signed URLs for temporary public access. Integrated with Cloudflare's global security services (WAF, DDoS protection).
+
+\textbf{Performance Features}: Edge-based caching available automatically when serving objects through Cloudflare CDN. Zero egress fees make direct delivery cheap and scalable. Event-driven architecture supported (object creation triggers via Workers).
+
+\subsection{Reference Use Cases}
+
+\begin{itemize}
+    \item \textbf{LunarCrush}: Utilizes R2 to scale globally without worrying about traffic surges, infrastructure limits, or surprise egress costs~\cite{cloudflare-lunarcrush}.
+
+    \item \textbf{VSCO}: Migrated over 2 petabytes of user images to R2 as their primary storage layer, using a custom Workers-based migration pipeline to eliminate egress fees---achieving \$400K in annual cloud savings~\cite{cloudflare-vsco}.
+
+    \item \textbf{DeliveryHero}: Leverages R2 to simplify security for remote work, protect against cyberattacks, and handle global traffic surges efficiently~\cite{cloudflare-deliveryhero}.
+\end{itemize}
+
+\section{Architecture and Feature Comparison}\label{sec:comparison}
+
+\begin{table}[H]
+\centering
+\caption{Amazon S3 vs Cloudflare R2 comparison}
+\label{tab:s3-r2}
+\begin{tabular}{p{3.5cm}p{5.5cm}p{5.5cm}}
+\hline
+\textbf{Aspect}         & \textbf{Amazon S3}                      & \textbf{Cloudflare R2}                  \\
+\hline
+Storage model           & Centralized per-region                  & Centralized clusters; globally          \\
+                        & Data in AWS regions (e.g., us-east-1)   & accessible via anycast routing          \\
+                        & Explicit region selection               & No region selection needed              \\
+\hline
+Physical storage        & Multi-AZ replication within region      & Centralized clusters, optimized for CDN \\
+\hline
+Namespace               & Flat; folders via prefixes              & Flat; folders via prefixes              \\
+\hline
+API access              & S3 REST API, AWS SDKs                   & S3-compatible API                       \\
+\hline
+Service integration     & Deep AWS integration (Lambda, Athena)   & Cloudflare Workers, CDN, Pages, Stream  \\
+\hline
+Security                & IAM, ACLs, bucket policies, SSE-S3/KMS  & Bucket permissions, signed URLs, DDoS   \\
+\hline
+Performance             & Multi-part upload, byte-range, Transfer Acceleration, Intelligent-Tiering & Edge caching via CDN, event triggers   \\
+\hline
+Egress cost             & \$0.09/GB (first 10TB)                  & \$0 (zero egress)                       \\
+\hline
+\end{tabular}
+\end{table}
+
+\textbf{Key Takeaway}: R2's elimination of egress fees and S3 API compatibility make it economically attractive. Cloudflare publishes a durability SLO of 99.999999999\% (eleven 9s) annual durability and a 99.9\% availability SLA~\cite{cloudflare-r2-durability}---comparable to S3's eleven-nine durability guarantee. However, R2's performance characteristics under high-concurrency, high-bandwidth conditions have not been independently verified, which motivates the empirical evaluation in this study.
+

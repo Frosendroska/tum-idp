@@ -1,43 +1,51 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Frosendroska/tum-idp)
 
-# [IDP] Replacing AWS S3 with Cloudflare R2: Cost Analysis and Feasibility Study
+# Replacing AWS S3 with Cloudflare R2: Cost Analysis and Feasibility Study
 
-This interdisciplinary project explores the feasibility and financial implications of replacing Amazon S3 with Cloudflare R2 as an object storage solution. Cloudflare R2 offers a competitive alternative with S3-compatible APIs, eliminating egress costs to the public internet. This project aims to assess whether migrating from AWS S3 to Cloudflare R2 can result in substantial cost savings while maintaining performance and reliability.
+**TU Munich — Interdisciplinary Project (IDP) · Ekaterina Braun · April 2026**
 
-## Project Structure
+## Abstract
 
-### 1. [Project Kickoff & Literature Review](notes/1-project-kickoff.md)
-> Research existing object storage solutions and cost structures.\
-Define evaluation criteria for comparing AWS S3 and Cloudflare R2.\
-Identify key performance indicators (KPIs) such as latency, egress costs, and API compatibility.
+This project evaluates the feasibility and cost implications of replacing Amazon S3 with Cloudflare R2 as an object storage backend. Cloudflare R2 offers an S3-compatible API and eliminates egress fees entirely, making it a compelling alternative for egress-heavy workloads such as ML pipelines, media delivery, and data archives.
 
-### 2. [Financial Analysis](notes/2-financial-analysis.md)
-> Calculate total cost of ownership (TCO) based on real-world use cases for both S3 and R2.\
-Analyze cost-saving potential and risk factors when integrating R2 with Amazon, Google, and Microsoft clouds.\
-Evaluate pricing models and potential hidden costs of using Cloudflare R2.
+A custom Python benchmarking framework (r2-bench) was developed to measure R2 throughput and latency from EC2 instances across six instance types (4–128 vCPUs, 10–200 Gbps) using a three-phase adaptive methodology. Key findings: R2 saturated a 15 Gbps NIC at 95% efficiency with no observable throttling; at higher bandwidths the Python client was the bottleneck, establishing 114 Gbps as a lower bound on R2's capacity. Under high concurrency, latency degrades proportionally and predictably — at saturation, 62% of request time is pre-transfer queueing. Smaller request chunks (50 MB vs 100 MB) reduce RTT by 96% at equal throughput. Regional routing matters: Stockholm outperformed Frankfurt by 14% in average throughput, with Frankfurt's tail latency (P95) 78–83% higher at peak load.
 
-### 3. [Implementation of Performance Tests & Monitoring](notes/3-performance-tests.md)
-> Set up test environments for AWS S3, Cloudflare R2.\
-Develop automated testing scripts to evaluate request throughput.\
-Identify potential scalability challenges.
+Cost modelling shows 53–77% monthly savings over S3 depending on egress volume, with migration break-even in 1.6–5 months across representative workload scales.
 
-### 4. [Technical Benchmarking](notes/4-technical-benchmarking.md)
-> Simulate real-world workloads to assess performance and stability, gradually increasing a scale.\
-Measure latency, request performance, and data retrieval speed across multiple cloud environments.
+## Links
 
-### 5. [Documentation & Presentation Preparation](notes/5-documentation.md)
-> Compile results into a structured report with technical findings and financial assessments.\
-Prepare a final presentation summarizing key insights and practical recommendations.
+- **Report (PDF):** [report/Replacing-AWS-S3-with-Cloudflare-R2-Cost-Analysis-and-Feasibility-Study-report.pdf](report/Replacing-AWS-S3-with-Cloudflare-R2-Cost-Analysis-and-Feasibility-Study-report.pdf)
+- **Report (Overleaf):** [overleaf.com/Ekaterina-Braun-IDP](https://sharelatex.tum.de/read/gskhscwmfptn#fe9e71)
 
-## Timeline
-- March 2025: Project Kickoff & Literature Review
-- April 2025: Financial Analysis
-- May 2025: Implementation of Performance Tests & Monitoring
-- June 2025: Technical Benchmarking
-- July 2025: Documentation & Presentation Preparation
+- **Presentation slides & transcript:** [report/presentation/](report/presentation/)
+- **Project description:** [Google Docs](https://docs.google.com/presentation/d/1xxCk1pUvnaJTkFJJCEnNik8FU2yyVuylQ4l7zmhHX3o/edit?usp=sharing)
 
-## Important links
+- **Project notes:** [notes/main-notes.md](notes/main-notes.md)
 
-- Project description: [[GoogleDocs](https://docs.google.com/document/d/1j7r3w-ZQyOZsmdqYzyyUJghaHzooTu6h3ejlI9FZICs/edit?tab=t.0#heading=h.uzx2xxidnmp0)]
-- Project notes: [[File in this repo](/notes/main-notes.md)]
-- Final document: [[Overleaf](https://www.overleaf.com/read/hwsttkkzjnyb#c92dd1)]
+## Repository Structure
+
+```
+tum-idp/
+├── R2-bench/               # Benchmarking framework
+│   ├── cli.py              # Main entry point
+│   ├── algorithms/         # Plateau detection & concurrency ramp logic
+│   ├── common/             # HTTP client, metrics collection
+│   ├── systems/            # R2 and S3 connector implementations
+│   ├── r2-results/         # Raw experiment results (parquet)
+│   ├── s3-results/         # S3 baseline results (parquet)
+│   ├── r2-plots/           # Generated throughput & latency plots
+│   └── EXPERIMENT_SETUP.md # Experiment log and configuration details
+│
+├── report/                 # LaTeX report source
+│   ├── main.tex            # Root document
+│   ├── chapters/           # Chapter .tex files (01–08)
+│   ├── figures/            # All plots and diagrams
+│   ├── report.pdf          # Compiled report
+│   └── presentation/       # Defence presentation
+│       ├── slides.md       # Slide-by-slide descriptions
+│       └── transcript.md   # Full speaker notes
+│
+├── notes/                  # Project notes by phase
+├── scripts/                # Utility scripts
+└── PLAN.md                 # Original project plan and timeline
+```

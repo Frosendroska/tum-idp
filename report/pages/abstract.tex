@@ -1,0 +1,43 @@
+\chapter*{\abstractname}
+
+Amazon S3’s egress fees—starting at \$0.09 per GB—are a major cost driver for bandwidth-intensive cloud workloads. Cloudflare R2 eliminates these fees and provides an S3-compatible API, but its performance under sustained high-concurrency and high-bandwidth conditions remains insufficiently characterised.
+
+We present \textbf{R2-bench}, a benchmarking framework designed to saturate high-bandwidth network interfaces from a single client using process-level parallelism, asynchronous I/O, and HTTP request pipelining. Using this framework, we conduct ten experiments across six EC2 instance types (10--200~Gbps) and complement the measurements with a structured cost and migration analysis.
+
+In our setup, R2 saturates a 15~Gbps interface at 95\% utilization without observable throttling. At higher bandwidths, throughput becomes client-limited, reaching up to 114~Gbps. Long-running experiments on instances with non-guaranteed network bandwidth reveal a throughput drop after 28--37 minutes under sustained load, indicating that short benchmarks may overestimate steady-state performance. Tail latency increases with concurrency, with pre-transfer delays accounting for up to 62\% of mean request time at saturation. Reducing request size from 100~MB to 50~MB at constant aggregate throughput improves peak-concurrency RTT by up to 96\%, highlighting request granularity as a primary lever for latency control.
+
+A cost analysis shows 53--77\% savings compared to S3 for egress-heavy workloads, with migration break-even typically within one to four months. For large-object, high-concurrency workloads, R2 achieves throughput comparable to S3 at single-client scale under client-limited conditions. These findings do not generalize to small-object or multi-client scenarios.
+
+
+
+
+
+
+
+
+
+
+
+
+
+%----------------------------------------------------------------------------------------------
+% \makeatletter
+% \ifthenelse{\pdf@strcmp{\languagename}{english}=0}
+% {\renewcommand{\abstractname}{Kurzfassung}}
+% {\renewcommand{\abstractname}{Abstract}}
+% \makeatother
+
+% \chapter{\abstractname}
+
+%TODO: Abstract in other language
+% \begin{otherlanguage}{ngerman} % TODO: select other language, either ngerman or english !
+
+% \end{otherlanguage}
+
+
+% % Undo the name switch
+% \makeatletter
+% \ifthenelse{\pdf@strcmp{\languagename}{english}=0}
+% {\renewcommand{\abstractname}{Abstract}}
+% {\renewcommand{\abstractname}{Kurzfassung}}
+% \makeatother

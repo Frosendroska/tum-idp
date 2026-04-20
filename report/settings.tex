@@ -1,0 +1,250 @@
+\PassOptionsToPackage{table,svgnames,dvipsnames}{xcolor}
+\usepackage{xcolor} % Added missing xcolor package
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[sc]{mathpazo}
+\usepackage[ngerman,english]{babel} % english is the same as american or USenglish
+\usepackage[autostyle]{csquotes}
+\usepackage{amsmath}
+% biblatex not available, using traditional BibTeX instead
+% unsrturl (from the urlbst package) extends unsrt to print the url field and make it clickable via hyperref
+% Install with: tlmgr install urlbst
+\bibliographystyle{unsrturl}
+\usepackage{graphicx}
+% \usepackage{scrhack} % necessary for listings package -- temporarily commented out
+\usepackage{listings}
+% \usepackage{lstautogobble} % temporarily commented out
+\usepackage{tikz} % needed for framework architecture diagrams
+\usetikzlibrary{positioning,calc,shapes,arrows}
+% \usepackage{pgfplots} % temporarily commented out
+% \usepackage{pgfplotstable} % temporarily commented out
+\usepackage{booktabs} % for better looking table creations, but bad with vertical lines by design (package creator despises vertical lines)
+\usepackage{float} % for [H] placement to fix tables/figures at exact position
+\usepackage[final]{microtype}
+\usepackage{caption}
+\usepackage[
+    colorlinks=true,
+    linkcolor=TUMBlue,           % internal links (TOC, references) - TUM blue
+    citecolor=TUMBlue,           % citation links - TUM blue  
+    urlcolor=TUMBlue,            % URL links - TUM blue
+    filecolor=TUMBlue,           % file links - TUM blue
+    anchorcolor=TUMBlue,         % anchor links - TUM blue
+    menucolor=TUMBlue,           % menu links - TUM blue
+    runcolor=TUMBlue,            % run links - TUM blue
+    bookmarksnumbered=true,      % add numbers to bookmarks
+    pdfstartview=FitH            % fit page horizontally when opening PDF
+]{hyperref}
+\usepackage{ifthen} % for comparison of the current language and changing of the thesis layout
+\usepackage{pdftexcmds} % string compare to work with all engines ns or lists
+\usepackage{subfig} % for having figures side by side
+% \usepackage{siunitx} % for physical accurate units and other numerical presentations -- temporarily commented out
+% \usepackage{multirow} % makes it possible to have bigger cells over multiple rows in a table -- temporarily commented out
+\usepackage{array} % different options for table cell orientation -- re-enabled for \newcolumntype
+% \usepackage{makecell} % allows nice manual configuration of cells with linebreaks in \thead and \makecell with alignments -- temporarily commented out
+% \usepackage{pdfpages} % for including multiple pages of pdfs -- temporarily commented out
+% \usepackage{adjustbox} % can center content wider than the \textwidth -- temporarily commented out
+% \usepackage{tablefootnote} % for footnotes in tables as \tablefootnote -- temporarily commented out
+% \usepackage{threeparttable} % another way to add footnotes as \tablenotes with \item [x] <your footnote> after setting \tnote{x} -- temporarily commented out 
+
+% https://tex.stackexchange.com/questions/42619/x-mark-to-match-checkmark
+\usepackage{amssymb}% http://ctan.org/pkg/amssymb
+\usepackage{pifont}% http://ctan.org/pkg/pifont
+\newcommand{\cmark}{\ding{51}}%
+\newcommand{\xmark}{\ding{55}}%
+% \usepackage{todonotes} % temporarily commented out
+
+
+\usepackage[acronym,toc]{glossaries} % Removed xindy as it may not be available
+\makeglossaries
+\loadglsentries{pages/glossary.tex} % important update for glossaries, before document
+
+
+% Bibliography will be handled by \bibliography{bibliography} command in main.tex
+
+\setkomafont{disposition}{\normalfont\bfseries} % use serif font for headings
+\linespread{1.0} % tighter line spread for more density
+
+% Make document more dense
+\setlength{\parindent}{0.8em} % reduce paragraph indentation
+\setlength{\parskip}{0.3em plus 0.1em minus 0.1em} % reduce paragraph spacing
+\setlength{\itemsep}{0.1em} % reduce item spacing in lists
+\setlength{\parsep}{0pt} % reduce paragraph separation in lists
+\setlength{\topsep}{0.2em} % reduce space above and below lists
+
+% Reduce section spacing
+\RedeclareSectionCommand[
+  beforeskip=0.8\baselineskip,
+  afterskip=0.4\baselineskip
+]{section}
+
+\RedeclareSectionCommand[
+  beforeskip=0.6\baselineskip,
+  afterskip=0.3\baselineskip
+]{subsection}
+
+\RedeclareSectionCommand[
+  beforeskip=0.4\baselineskip,
+  afterskip=0.2\baselineskip
+]{subsubsection}
+
+% Reduce spacing in lists and other environments  
+% Modify list environments to be more compact
+\let\originalitemize\itemize
+\let\originalenumerate\enumerate
+\renewenvironment{itemize}{\originalitemize\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}{\endlist}
+\renewenvironment{enumerate}{\originalenumerate\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}{\endlist}
+
+% Reduce spacing around math environments
+\setlength{\abovedisplayskip}{0.5\baselineskip}
+\setlength{\belowdisplayskip}{0.5\baselineskip}
+\setlength{\abovedisplayshortskip}{0.3\baselineskip}
+\setlength{\belowdisplayshortskip}{0.3\baselineskip}
+
+% Make chapters continuous (don't start on new pages)  
+% Completely override chapter command to prevent page breaks
+\makeatletter
+\renewcommand*{\@makechapterhead}[1]{%
+  \vspace{1\baselineskip}%
+  {\parindent \z@ \raggedright \normalfont
+    \ifnum \c@secnumdepth >\m@ne
+      \if@mainmatter
+        \Large\bfseries \thechapter.\space #1\par\nobreak
+      \else
+        \Large\bfseries #1\par\nobreak  
+      \fi
+    \else
+      \Large\bfseries #1\par\nobreak
+    \fi
+    \vskip 0.5\baselineskip
+  }%
+}
+
+\renewcommand*{\@makeschapterhead}[1]{%
+  \vspace{1\baselineskip}%
+  {\parindent \z@ \raggedright
+    \normalfont
+    \interlinepenalty\@M
+    \Large \bfseries #1\par\nobreak
+    \vskip 0.5\baselineskip
+  }%
+}
+
+% Override the chapter command completely to remove all page breaking
+\renewcommand\chapter{%
+  \@ifstar{\@schapter}{\@dblarg\@chapter}%
+}
+
+\def\@chapter[#1]#2{%
+  \ifnum \c@secnumdepth >\m@ne
+    \if@mainmatter
+      \refstepcounter{chapter}%
+      \typeout{\thechapter.\space#1}%
+      \addcontentsline{toc}{chapter}%
+                       {\protect\numberline{\thechapter}#1}%
+    \else
+      \addcontentsline{toc}{chapter}{#1}%
+    \fi
+  \else
+    \addcontentsline{toc}{chapter}{#1}%
+  \fi
+  \chaptermark{#1}%
+  \@makechapterhead{#2}%
+}
+
+\def\@schapter#1{%
+  \@makeschapterhead{#1}%
+  \chaptermark{#1}%
+  \addcontentsline{toc}{chapter}{#1}%
+}
+\makeatother
+
+% Add table of contents to PDF bookmarks
+\BeforeTOCHead[toc]{{\cleardoublepage\pdfbookmark[0]{\contentsname}{toc}}}
+
+% Define TUM corporate design colors
+% Taken from http://portal.mytum.de/corporatedesign/index_print/vorlagen/index_farben
+\definecolor{TUMBlue}{HTML}{0065BD}
+\definecolor{TUMSecondaryBlue}{HTML}{005293}
+\definecolor{TUMSecondaryBlue2}{HTML}{003359}
+\definecolor{TUMBlack}{HTML}{000000}
+\definecolor{TUMWhite}{HTML}{FFFFFF}
+\definecolor{TUMDarkGray}{HTML}{333333}
+\definecolor{TUMGray}{HTML}{808080}
+\definecolor{TUMLightGray}{HTML}{CCCCC6}
+\definecolor{TUMAccentGray}{HTML}{DAD7CB}
+\definecolor{TUMAccentOrange}{HTML}{E37222}
+\definecolor{TUMAccentGreen}{HTML}{A2AD00}
+\definecolor{TUMAccentLightBlue}{HTML}{98C6EA}
+\definecolor{TUMAccentBlue}{HTML}{64A0C8}
+
+% Settings for pgfplots -- temporarily commented out since pgfplots package is commented out
+% \pgfplotsset{compat=newest}
+% \pgfplotsset{
+%   % For available color names, see http://www.latextemplates.com/svgnames-colors
+%   cycle list={TUMBlue\\TUMAccentOrange\\TUMAccentGreen\\TUMSecondaryBlue2\\TUMDarkGray\\},
+% }
+
+% Settings for lstlistings
+
+% Use this for basic highlighting
+\lstset{%
+  basicstyle=\ttfamily,
+  columns=fullflexible,
+  % autogobble, % commented out since lstautogobble package is commented out
+  keywordstyle=\bfseries\color{TUMBlue},
+  stringstyle=\color{TUMAccentGreen}
+}
+
+% use this for C# highlighting
+% %\setmonofont{Consolas} %to be used with XeLaTeX or LuaLaTeX
+% \definecolor{bluekeywords}{rgb}{0,0,1}
+% \definecolor{greencomments}{rgb}{0,0.5,0}
+% \definecolor{redstrings}{rgb}{0.64,0.08,0.08}
+% \definecolor{xmlcomments}{rgb}{0.5,0.5,0.5}
+% \definecolor{types}{rgb}{0.17,0.57,0.68}
+
+% \lstset{language=[Sharp]C,
+% captionpos=b,
+% %numbers=left, % numbering
+% %numberstyle=\tiny, % small row numbers
+% frame=lines, % above and underneath of listings is a line
+% showspaces=false,
+% showtabs=false,
+% breaklines=true,
+% showstringspaces=false,
+% breakatwhitespace=true,
+% escapeinside={(*@}{@*)},
+% commentstyle=\color{greencomments},
+% morekeywords={partial, var, value, get, set},
+% keywordstyle=\color{bluekeywords},
+% stringstyle=\color{redstrings},
+% basicstyle=\ttfamily\small,
+% }
+
+% Settings for search order of pictures
+\graphicspath{
+    {logos/}
+    {figures/}
+}
+
+% Set up hyphenation rules for the language package when mistakes happen
+\babelhyphenation[english]{
+an-oth-er
+ex-am-ple
+}
+
+% Decide between
+%\newcommand{\todo}[1]{\textbf{\textsc{\textcolor{TUMAccentOrange}{(TODO: #1)}}}} % for one paragraph, otherwise error!
+%\newcommand{\done}[1]{\textit{\textsc{\textcolor{TUMAccentBlue}{(Done: #1)}}}} % for one paragraph, otherwise error!
+% and
+\newcommand{\todo}[1]{{\bfseries{\scshape{\color{TUMAccentOrange}[(TODO: #1)]}}}} % for multiple paragraphs
+\newcommand{\done}[1]{{\itshape{\scshape{\color{TUMAccentBlue}[(Done: #1)]}}}} % for multiple paragraphs
+% for error handling of intended behavior in your latex documents.
+
+\newcommand{\tabitem}{~~\llap{\textbullet}~~}
+
+\newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}} % for horizontal alignment with limited column width
+\newcolumntype{M}[1]{>{\centering\arraybackslash}m{#1}} % for horizontal and vertical alignment with limited column width
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}m{#1}} % for vertical alignment left with limited column width
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}m{#1}} % for vertical alignment right with limited column width

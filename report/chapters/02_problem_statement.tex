@@ -1,0 +1,21 @@
+%!TeX root = ../main.tex
+
+\chapter{Problem Statement and Research Motivation}\label{chapter:problem-statement}
+
+This chapter establishes the specific knowledge gaps that motivate the empirical study and defines the three research questions the paper answers. Understanding what is currently unknown about R2---and why that gap matters for practitioners---provides the rationale for the experimental design described in Chapter~\ref{chapter:framework}.
+
+\section{Problem Statement}\label{sec:motivation}
+
+The transition from Amazon S3 to Cloudflare R2 is driven by a powerful economic incentive: the elimination of egress fees, which frequently constitute a disproportionate share of cloud storage expenditures \cite{cerre2024cloud, wasabi2024index}. However, this shift introduces a significant operational risk in the form of performance unpredictability. While S3's performance characteristics are well-documented through both AWS documentation and an extensive body of third-party benchmarks, R2's architecture is only partially documented through Cloudflare's public technical blog posts and has not been independently verified under production-scale conditions.
+
+Independent verification is essential for mission-critical adoption, as vendor documentation typically omits granular tail-latency profiles under congestion \cite{leitner2016benchmarking, varghese2014cloud}. Academic literature has comparatively less focus on empirical benchmarking of commercial object storage at high bandwidth scales, with more attention given to theoretical consistency models and distributed algorithms \cite{zhang2018pileus, muralidhar2014f4, lu2021strong}. Specifically, there is a lack of rigorous public data on R2's tail latency stability, throughput saturation behaviour, and concurrency characteristics under sustained high-bandwidth load.
+
+Without these empirical baselines, organizations face a binary choice between the \textit{well-documented performance of S3} and the \textit{cost-efficiency of R2}. This study seeks to bridge that gap by providing the independent data necessary for informed architectural decisions.
+
+\section{Research Questions}\label{sec:research-questions}
+
+\begin{enumerate}
+    \item \textbf{Throughput Parity}: Can R2 saturate the high-bandwidth network interfaces of modern EC2 instances?
+    \item \textbf{Latency Characteristics}: How do R2’s tail-latency distributions ($P_{99}$) evolve as concurrency scales toward infrastructure saturation?
+    \item \textbf{Cost-Performance Trade-off}: What are the total migration costs, and how quickly do R2's zero egress fees offset the initial expense?
+\end{enumerate}

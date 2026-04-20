@@ -1,0 +1,83 @@
+%!TeX root = ../main.tex
+
+\chapter{Migration Costs}\label{chapter:migration}
+
+Migrating from S3 to R2 is not cost-free: all data must first be transferred out of S3, which incurs one-time egress charges. This chapter quantifies those migration costs across representative data scales and outlines strategies to minimise them. The central financial question---how quickly the ongoing monthly savings recoup the migration investment---is analysed quantitatively in Section~\ref{sec:migration-break-even} of Chapter~\ref{chapter:results}, once R2's performance profile has been established.
+
+\section{Cost Formulas}\label{sec:cost-formulas}
+
+Migrating from Amazon S3 to Cloudflare R2 incurs one-time costs that must be offset by R2's ongoing savings. These expenses consist of three components: S3 egress fees, S3 GET operation costs, and R2 PUT operation costs~\cite{aws-s3-pricing,cloudflare-r2-pricing}.
+
+\begin{equation}
+C_{\text{total}} = C_{\text{egress}} + C_{\text{GET}} + C_{\text{PUT}}
+\end{equation}
+
+\subsubsection{S3 Egress Cost}
+
+S3 charges tiered egress fees for data transferred out to the internet. The cost function is piecewise linear:
+
+\begin{equation}
+C_{\text{egress}} = \sum_{i=1}^{4} \min(D_{\text{remaining}}, T_i) \times r_i
+\end{equation}
+
+where $D_{\text{remaining}}$ is the remaining data to be transferred, $T_i$ is the tier size, and $r_i$ is the rate for tier $i$:
+
+\begin{itemize}
+    \item Tier 1 (0–10 TB): $r_1 = \$0.09$ per GB
+    \item Tier 2 (10–50 TB): $r_2 = \$0.085$ per GB
+    \item Tier 3 (50–150 TB): $r_3 = \$0.07$ per GB
+    \item Tier 4 ($>$150 TB): $r_4 = \$0.05$ per GB
+\end{itemize}
+
+
+\subsubsection{S3 GET Operations Cost}
+
+Each object must be read from S3 during migration. For S3 Standard, GET operations cost \$0.0004 per 1,000 requests:
+
+\begin{equation}
+C_{\text{GET}} = \frac{N_{\text{objects}}}{1000} \times 0.0004
+\end{equation}
+
+where $N_{\text{objects}}$ is the total number of objects.
+
+\subsubsection{R2 PUT Operations Cost}
+
+Each object must be written to R2. Class A operations (PUT) cost \$4.50 per million requests:
+
+\begin{equation}
+C_{\text{PUT}} = \frac{N_{\text{objects}}}{1,000,000} \times 4.50
+\end{equation}
+
+
+\section{Migration Scenarios}\label{sec:scenarios}
+
+Table~\ref{tab:migration-scenarios} analyzes costs across representative scenarios.
+
+\begin{table}[H]
+\centering
+\caption{Migration cost analysis across scenarios}
+\label{tab:migration-scenarios}
+\begin{tabular}{p{2.5cm}p{2cm}p{2.5cm}p{2.5cm}p{2.5cm}}
+\hline
+\textbf{Scenario} & \textbf{Data Size} & \textbf{Objects} & \textbf{Total Cost} & \textbf{Cost per TB} \\
+\hline
+Small & 5.0 TB & 100,000 & \$461.29 & \$92.26 \\
+Medium & 50.0 TB & 1M & \$4,408.10 & \$88.16 \\
+Large & 200.0 TB & 10M & \$14,180.20 & \$70.90 \\
+Hyperscale & 1000.0 TB & 50M & \$55,336.20 & \$55.34 \\
+Enterprise & 2000.0 TB & 100M & \$106,781.20 & \$53.39 \\
+\hline
+\end{tabular}
+\end{table}
+
+S3 egress costs constitute 95--98\% of total migration expenses across all scenarios, with operation costs (GET + PUT) negligible by comparison. Cost per TB decreases as data volume increases due to S3's tiered egress pricing---at 2~PB, the effective rate drops to \$53.39/TB, still 2$\times$ higher than S3 storage costs. For scenarios with many small objects, operation costs become marginally more significant but remain under 5\% of total costs. The amortisation timeline---how quickly these one-time costs are recovered through ongoing monthly savings---is analysed quantitatively in Section~\ref{sec:migration-break-even} of Chapter~\ref{chapter:results}, alongside concrete break-even figures for each workload scale.
+
+\section{Cost Optimization Strategies}\label{sec:optimization}
+
+\textbf{Batch operations.} Grouping small objects into larger archives (e.g., TAR, ZIP) before migration reduces the number of GET and PUT operations, lowering operational costs. This is most effective when the dataset consists of many small files. The trade-off is that it sacrifices object-level metadata and access granularity, which may not be acceptable for all workloads.
+
+\textbf{Tiered migration.} Rather than migrating all data at once, organizations can move data in phases---starting with the most frequently accessed (hot) objects to realise egress savings as early as possible, then progressively migrating colder data. This also allows incremental validation of R2 performance before committing to a full cut-over.
+
+\textbf{Cloudflare migration tools.} Cloudflare provides two tools that charge only for Class~A operations (\$4.50 per million requests)~\cite{cloudflare-super-slurper,cloudflare-sippy}. Super Slurper performs bulk migration from S3 or GCS to R2 in a single operation, preserving metadata but requiring full S3 egress fees upfront. Sippy instead fetches objects lazily---only when they are first requested---spreading the egress cost over time and eliminating upfront outlay at the expense of a longer transition window.
+
+\textbf{Free tier utilization.} R2's free tier (10~GB storage, 1M Class~A operations, 10M Class~B operations per month) enables cost-free integration testing and staging validation before committing to production migration~\cite{cloudflare-r2-pricing}.

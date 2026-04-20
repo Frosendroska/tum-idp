@@ -1,0 +1,12 @@
+%!TeX root = ../main.tex
+% Add the above to each chapter to make compiling the PDF easier in some editors.
+
+\chapter{Introduction}\label{chapter:introduction}
+
+Cloud object storage has become a foundational component of modern data infrastructure. Since its launch in 2006, Amazon S3 has established the industry de facto standard, with its API widely adopted across data lakes, AI training pipelines, and distributed systems~\cite{aws-s3-overview}. As datasets grow and workloads become increasingly bandwidth-intensive, however, one aspect of S3’s pricing model becomes a recurring cost concern: data transfer fees starting at \$0.09 per GB. For organisations running high-volume or geographically distributed workloads, these fees constitute a significant and often dominant share of cloud storage expenditure~\cite{cerre2024cloud,wasabi2024index}.
+
+Cloudflare R2 addresses this directly by eliminating egress fees entirely. With an S3-compatible API, it allows existing tools and application code to work without modification, lowering the practical barrier to adoption. However, zero egress cost is only valuable if performance is acceptable: an alternative that is cheaper but slower, less reliable, or less predictable under load is not a genuine substitute for production workloads.
+
+Empirical characterisation of R2’s performance under sustained high-concurrency and high-bandwidth conditions is limited. Vendor documentation does not cover tail-latency behaviour under saturation or throughput ceilings at high bandwidth. Existing third-party benchmarks focus on low-concurrency, small-object scenarios representative of web workloads~\cite{kerkour2024s3r2,tigris-benchmark}, leaving the regime relevant for data pipelines, media processing, and ML infrastructure unevaluated.
+
+This study fills that gap by developing R2-bench, a purpose-built benchmarking framework, and using it to evaluate R2 across six EC2 instance types spanning 10--200~Gbps. It addresses three questions: whether R2 can saturate high-bandwidth network interfaces, how tail latency behaves under high concurrency, and whether the cost savings justify migration for the workload classes where performance is sufficient.
