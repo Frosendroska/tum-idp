@@ -4,7 +4,7 @@
 
 **TU Munich — Interdisciplinary Project (IDP) · Ekaterina Braun · April 2026**
 
-## Abstract
+## Abstract (short)
 
 This project evaluates the feasibility and cost implications of replacing Amazon S3 with Cloudflare R2 as an object storage backend. Cloudflare R2 offers an S3-compatible API and eliminates egress fees entirely, making it a compelling alternative for egress-heavy workloads such as ML pipelines, media delivery, and data archives.
 
