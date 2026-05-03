@@ -4,13 +4,15 @@
 
 **TU Munich — Interdisciplinary Project (IDP) · Ekaterina Braun · April 2026**
 
-## Abstract (short)
+## Abstract
 
-This project evaluates the feasibility and cost implications of replacing Amazon S3 with Cloudflare R2 as an object storage backend. Cloudflare R2 offers an S3-compatible API and eliminates egress fees entirely, making it a compelling alternative for egress-heavy workloads such as ML pipelines, media delivery, and data archives.
+Amazon S3’s egress fees—starting at $0.09 per GB—are a major cost driver for bandwidth-intensive cloud workloads. Cloudflare R2 eliminates these fees and provides an S3-compatible API, but its performance under sustained high-concurrency and high-bandwidth conditions remains insufficiently characterised.
 
-A custom Python benchmarking framework (r2-bench) was developed to measure R2 throughput and latency from EC2 instances across six instance types (4–128 vCPUs, 10–200 Gbps) using a three-phase adaptive methodology. Key findings: R2 saturated a 15 Gbps NIC at 95% efficiency with no observable throttling; at higher bandwidths the Python client was the bottleneck, establishing 114 Gbps as a lower bound on R2's capacity. Under high concurrency, latency degrades proportionally and predictably — at saturation, 62% of request time is pre-transfer queueing. Smaller request chunks (50 MB vs 100 MB) reduce RTT by 96% at equal throughput. Regional routing matters: Stockholm outperformed Frankfurt by 14% in average throughput, with Frankfurt's tail latency (P95) 78–83% higher at peak load.
+We present a benchmarking framework designed to saturate high-bandwidth network interfaces from a single Python client using process-level parallelism, asynchronous I/O, and HTTP request pipelining. Using this framework, we conduct ten experiments across six EC2 instance types (10 - 200Gbps) and complement the measurements with a structured cost and migration analysis.
 
-Cost modelling shows 53–77% monthly savings over S3 depending on egress volume, with migration break-even in 1.6–5 months across representative workload scales.
+In our setup, R2 saturates a 15 Gbps interface at 95 % utilization without observable throttling. At higher bandwidths, throughput becomes client-limited, reaching up to 114~Gbps. Long-running experiments on instances with non-guaranteed network bandwidth reveal a throughput drop after around 30 minutes under sustained load, indicating that short benchmarks may overestimate steady-state performance. Tail latency increases with concurrency, with pre-transfer delays accounting for up to 62 % of mean request time at saturation. Reducing request size from 100 MB to 50 MB at constant aggregate throughput improves peak-concurrency RTT by up to 96 %, highlighting request granularity as a primary lever for latency control.
+
+A cost analysis shows 53 - 77 % savings compared to S3 for egress-heavy workloads, with migration break-even typically within one to four months. For large-object, high-concurrency workloads, R2 achieves throughput comparable to S3 at single-client scale under client-limited conditions. These findings do not generalize to small-object or multi-client scenarios.
 
 ## Links
 
